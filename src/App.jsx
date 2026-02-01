@@ -3,7 +3,7 @@ import Header from "./components/Header/Header";
 import Footer from "./components/Footer/Footer";
 import Home from "./components/Home/Home";
 import FrameSelection from "./components/FrameSelection/FrameSelection";
-import MeasurementForm from "./components/MeasurementForm/MeasurementForm";
+import ScanUpload from "./components/ScanUpload/ScanUpload";
 import Confirmation from "./components/Confirmation/Confirmation";
 import "./App.css";
 
@@ -41,32 +41,22 @@ const frames = [
 export default function App() {
   const [step, setStep] = useState("home");
   const [selectedFrame, setSelectedFrame] = useState(null);
-  const [measurements, setMeasurements] = useState({
-    faceWidth: "",
-    noseBridge: "",
-    templeLength: "",
-    email: "",
-  });
+  const [scanData, setScanData] = useState(null);
 
   const handleFrameSelect = (frame) => {
     setSelectedFrame(frame);
-    setStep("measurements");
+    setStep("scan");
   };
 
-  const handleMeasurementSubmit = (measurementData) => {
-    setMeasurements(measurementData);
+  const handleScanSubmit = (data) => {
+    setScanData(data);
     setStep("confirmation");
   };
 
   const resetForm = () => {
     setStep("home");
     setSelectedFrame(null);
-    setMeasurements({
-      faceWidth: "",
-      noseBridge: "",
-      templeLength: "",
-      email: "",
-    });
+    setScanData(null);
   };
 
   return (
@@ -85,17 +75,17 @@ export default function App() {
             />
           )}
 
-          {step === "measurements" && selectedFrame && (
-            <MeasurementForm
+          {step === "scan" && selectedFrame && (
+            <ScanUpload
               selectedFrame={selectedFrame}
               onBack={() => setStep("frames")}
-              onSubmit={handleMeasurementSubmit}
+              onSubmit={handleScanSubmit}
             />
           )}
 
           {step === "confirmation" && (
             <Confirmation
-              measurements={measurements}
+              scanData={scanData}
               selectedFrame={selectedFrame}
               onReset={resetForm}
             />

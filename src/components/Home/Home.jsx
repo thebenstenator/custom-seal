@@ -25,9 +25,10 @@ export default function Home({ onGetStarted }) {
         </div>
         <div className="feature-card">
           <Upload className="feature-card__icon" size={48} />
-          <h3 className="feature-card__title">Provide Measurements</h3>
+          <h3 className="feature-card__title">Upload Your 3D Scan</h3>
           <p className="feature-card__description">
-            Simple measurements to ensure a perfect, comfortable fit
+            Scan your face with your smartphone and upload it for a perfectly
+            fitted seal
           </p>
         </div>
         <div className="feature-card">

@@ -3,7 +3,7 @@ import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./Confirmation.css";
 
-export default function Confirmation({ measurements, selectedFrame, onReset }) {
+export default function Confirmation({ scanData, selectedFrame, onReset }) {
   return (
     <div className="confirmation">
       <div className="confirmation__card">
@@ -24,18 +24,18 @@ export default function Confirmation({ measurements, selectedFrame, onReset }) {
         </div>
         <h2 className="confirmation__title">Thank You!</h2>
         <p className="confirmation__message">
-          Your measurements have been recorded. We'll notify you at{" "}
-          <span className="confirmation__email">{measurements.email}</span> when
-          the 3D model generation feature is ready.
+          Your 3D scan has been received. We'll process it and notify you when
+          your custom moisture chamber attachment is ready to download.
         </p>
 
         <div className="confirmation__details">
-          <h3 className="confirmation__details-title">Your Details:</h3>
+          <h3 className="confirmation__details-title">Submission Summary:</h3>
           <ul className="confirmation__list">
             <li>Frame Style: {selectedFrame.name}</li>
-            <li>Face Width: {measurements.faceWidth}mm</li>
-            <li>Nose Bridge: {measurements.noseBridge}mm</li>
-            <li>Temple Length: {measurements.templeLength}mm</li>
+            <li>Scan File: {scanData.fileName}</li>
+            <li>
+              File Size: {(scanData.fileSize / 1024 / 1024).toFixed(2)} MB
+            </li>
           </ul>
         </div>
 
@@ -47,10 +47,15 @@ export default function Confirmation({ measurements, selectedFrame, onReset }) {
       <Notice variant="info">
         <h3 className="notice__title">What's Next?</h3>
         <ul className="notice__list">
-          <li>✓ We're building the 3D mesh processing algorithm</li>
-          <li>✓ You'll receive your custom STL file for 3D printing</li>
-          <li>✓ Print with flexible filament (TPU recommended)</li>
-          <li>✓ Attach to your glasses for a perfect moisture seal</li>
+          <li>
+            ✓ Your scan will be processed and aligned to your selected frame
+          </li>
+          <li>✓ A custom seal piece will be generated to bridge the gap</li>
+          <li>✓ You'll receive a download link for your STL file</li>
+          <li>
+            ✓ Print with flexible filament (TPU recommended) and attach to your
+            glasses
+          </li>
         </ul>
       </Notice>
     </div>
