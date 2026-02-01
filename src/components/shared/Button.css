@@ -1,0 +1,37 @@
+.button {
+  padding: 0.75rem 2rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.button--primary {
+  background: #2563eb;
+  color: white;
+}
+
+.button--primary:hover {
+  background: #1d4ed8;
+}
+
+.button--back {
+  background: transparent;
+  color: #2563eb;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.button--back:hover {
+  color: #1d4ed8;
+}
+
+.button--full {
+  width: 100%;
+  justify-content: center;
+}

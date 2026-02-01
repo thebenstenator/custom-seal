@@ -1,0 +1,73 @@
+.confirmation {
+  max-width: 42rem;
+  margin: 0 auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.confirmation__card {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.confirmation__icon {
+  width: 4rem;
+  height: 4rem;
+  background: #d1fae5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.confirmation__checkmark {
+  width: 2rem;
+  height: 2rem;
+  color: #059669;
+}
+
+.confirmation__title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 1rem;
+}
+
+.confirmation__message {
+  color: #4b5563;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.confirmation__email {
+  font-weight: 600;
+}
+
+.confirmation__details {
+  background: #eff6ff;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.confirmation__details-title {
+  font-weight: 600;
+  color: #1e3a8a;
+  margin-bottom: 0.5rem;
+}
+
+.confirmation__list {
+  list-style: none;
+  color: #1e40af;
+  font-size: 0.875rem;
+}
+
+.confirmation__list li {
+  margin: 0.25rem 0;
+}
