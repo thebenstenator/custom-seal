@@ -5,6 +5,7 @@ import Home from "./components/Home/Home";
 import FrameSelection from "./components/FrameSelection/FrameSelection";
 import ScanUpload from "./components/ScanUpload/ScanUpload";
 import Confirmation from "./components/Confirmation/Confirmation";
+import ModelPreview from "./components/ModelPreview/ModelPreview";
 import "./App.css";
 
 const frames = [
@@ -45,7 +46,7 @@ export default function App() {
 
   const handleFrameSelect = (frame) => {
     setSelectedFrame(frame);
-    setStep("scan");
+    setStep("preview");
   };
 
   const handleScanSubmit = (data) => {
@@ -72,6 +73,14 @@ export default function App() {
               frames={frames}
               onBack={() => setStep("home")}
               onSelectFrame={handleFrameSelect}
+            />
+          )}
+
+          {step === "preview" && selectedFrame && (
+            <ModelPreview
+              selectedFrame={selectedFrame}
+              onBack={() => setStep("frames")}
+              onContinue={() => setStep("scan")}
             />
           )}
 
