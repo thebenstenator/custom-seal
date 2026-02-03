@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
@@ -32,11 +33,18 @@ function GlassesModel() {
   );
 }
 
-export default function ModelPreview({ selectedFrame, onBack, onContinue }) {
+export default function ModelPreview({ selectedFrame }) {
+  const navigate = useNavigate();
+
+  if (!selectedFrame) {
+    navigate("/frames");
+    return null;
+  }
+
   return (
     <div className="model-preview">
       <div className="page-header">
-        <Button variant="back" onClick={onBack}>
+        <Button variant="back" onClick={() => navigate("/frames")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Preview Your Selection</h2>
@@ -55,13 +63,15 @@ export default function ModelPreview({ selectedFrame, onBack, onContinue }) {
       </Notice>
 
       <div className="model-preview__viewer">
-        <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+        <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
           <Suspense fallback={null}>
             <ambientLight intensity={0.5} />
             <directionalLight position={[10, 10, 5]} intensity={1} />
             <directionalLight position={[-10, -10, -5]} intensity={0.3} />
-            <HeadModel />
-            <GlassesModel />
+            <group rotation={[0, Math.PI / 2, 0]}>
+              <HeadModel />
+              <GlassesModel />
+            </group>
             <OrbitControls enableZoom={true} enablePan={false} />
           </Suspense>
         </Canvas>
@@ -71,7 +81,7 @@ export default function ModelPreview({ selectedFrame, onBack, onContinue }) {
       </div>
 
       <div className="model-preview__actions">
-        <Button variant="primary" onClick={onContinue}>
+        <Button variant="primary" onClick={() => navigate("/scan")}>
           Continue to Upload Scan
         </Button>
       </div>

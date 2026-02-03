@@ -1,10 +1,13 @@
 import React from "react";
+import {useNavigate} from "react-router-dom";
 import { Eye, Upload, Users } from "lucide-react";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./Home.css";
 
-export default function Home({ onGetStarted }) {
+export default function Home() {
+  const navigate = useNavigate();
+
   return (
     <div className="home">
       <div className="hero">
@@ -41,7 +44,7 @@ export default function Home({ onGetStarted }) {
       </div>
 
       <div className="cta">
-        <Button variant="primary" onClick={onGetStarted}>
+        <Button variant="primary" onClick={() => navigate("/frames")}>
           Get Started
         </Button>
       </div>

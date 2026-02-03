@@ -1,10 +1,18 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./FrameSelection.css";
 
 export default function FrameSelection({ frames, onBack, onSelectFrame }) {
+  const navigate = useNavigate();
+
+  function handleFrameSelect(frame) {
+    onSelectFrame(frame);
+    navigate("/preview");
+  }
+
   return (
     <div className="frames">
       <div className="page-header">
@@ -21,7 +29,7 @@ export default function FrameSelection({ frames, onBack, onSelectFrame }) {
         {frames.map((frame) => (
           <button
             key={frame.id}
-            onClick={() => onSelectFrame(frame)}
+            onClick={() => handleFrameSelect(frame)}
             className={`frame-card ${frame.popular ? "frame-card--popular" : ""}`}
           >
             <div className="frame-card__content">

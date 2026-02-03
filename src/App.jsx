@@ -1,11 +1,12 @@
 import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Header from "./components/Header/Header";
 import Footer from "./components/Footer/Footer";
 import Home from "./components/Home/Home";
 import FrameSelection from "./components/FrameSelection/FrameSelection";
+import ModelPreview from "./components/ModelPreview/ModelPreview";
 import ScanUpload from "./components/ScanUpload/ScanUpload";
 import Confirmation from "./components/Confirmation/Confirmation";
-import ModelPreview from "./components/ModelPreview/ModelPreview";
 import "./App.css";
 
 const frames = [
@@ -40,69 +41,55 @@ const frames = [
 ];
 
 export default function App() {
-  const [step, setStep] = useState("home");
   const [selectedFrame, setSelectedFrame] = useState(null);
   const [scanData, setScanData] = useState(null);
 
-  const handleFrameSelect = (frame) => {
-    setSelectedFrame(frame);
-    setStep("preview");
-  };
-
-  const handleScanSubmit = (data) => {
-    setScanData(data);
-    setStep("confirmation");
-  };
-
-  const resetForm = () => {
-    setStep("home");
-    setSelectedFrame(null);
-    setScanData(null);
-  };
-
   return (
-    <div className="app">
-      <Header />
+    <Router>
+      <div className="app">
+        <Header />
 
-      <main className="main">
-        <div className="main__container">
-          {step === "home" && <Home onGetStarted={() => setStep("frames")} />}
+        <main className="main">
+          <div className="main__container">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route
+                path="/frames"
+                element={
+                  <FrameSelection
+                    frames={frames}
+                    onSelectFrame={setSelectedFrame}
+                  />
+                }
+              />
+              <Route
+                path="/preview"
+                element={<ModelPreview selectedFrame={selectedFrame} />}
+              />
+              <Route
+                path="/scan"
+                element={
+                  <ScanUpload
+                    selectedFrame={selectedFrame}
+                    onSubmit={setScanData}
+                  />
+                }
+              />
+              <Route
+                path="/confirmation"
+                element={
+                  <Confirmation
+                    scanData={scanData}
+                    selectedFrame={selectedFrame}
+                  />
+                }
+              />
+            </Routes>
+          </div>
+        </main>
 
-          {step === "frames" && (
-            <FrameSelection
-              frames={frames}
-              onBack={() => setStep("home")}
-              onSelectFrame={handleFrameSelect}
-            />
-          )}
-
-          {step === "preview" && selectedFrame && (
-            <ModelPreview
-              selectedFrame={selectedFrame}
-              onBack={() => setStep("frames")}
-              onContinue={() => setStep("scan")}
-            />
-          )}
-
-          {step === "scan" && selectedFrame && (
-            <ScanUpload
-              selectedFrame={selectedFrame}
-              onBack={() => setStep("frames")}
-              onSubmit={handleScanSubmit}
-            />
-          )}
-
-          {step === "confirmation" && (
-            <Confirmation
-              scanData={scanData}
-              selectedFrame={selectedFrame}
-              onReset={resetForm}
-            />
-          )}
-        </div>
-      </main>
-
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </Router>
   );
 }

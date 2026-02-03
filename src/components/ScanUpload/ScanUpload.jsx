@@ -1,16 +1,23 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Upload, CheckCircle, AlertCircle } from "lucide-react";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ScanUpload.css";
 
-export default function ScanUpload({ selectedFrame, onBack, onSubmit }) {
+export default function ScanUpload({ selectedFrame, onSubmit }) {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setError(null);
+
+    if (!selectedFrame) {
+      navigate("/frames");
+      return null;
+    }
 
     if (!file) return;
 
@@ -34,13 +41,14 @@ export default function ScanUpload({ selectedFrame, onBack, onSubmit }) {
         fileSize: uploadedFile.size,
         frame: selectedFrame,
       });
+      navigate("/confirmation");
     }
   };
 
   return (
     <div className="scan-upload">
       <div className="page-header">
-        <Button variant="back" onClick={onBack}>
+        <Button variant="back" onClick={() => navigate("/preview")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Upload Your 3D Scan</h2>

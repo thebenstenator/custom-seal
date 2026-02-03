@@ -1,9 +1,16 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./Confirmation.css";
 
-export default function Confirmation({ scanData, selectedFrame, onReset }) {
+export default function Confirmation({ scanData, selectedFrame }) {
+  const navigate = useNavigate();
+
+  if (!scanData || !selectedFrame) {
+    navigate("/scan");
+    return null;
+  }
   return (
     <div className="confirmation">
       <div className="confirmation__card">
@@ -39,7 +46,7 @@ export default function Confirmation({ scanData, selectedFrame, onReset }) {
           </ul>
         </div>
 
-        <Button variant="primary" onClick={onReset}>
+        <Button variant="primary" onClick={() => navigate("/")}>
           Start Another Design
         </Button>
       </div>
