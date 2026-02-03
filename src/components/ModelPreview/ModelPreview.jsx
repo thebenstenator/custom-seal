@@ -8,8 +8,10 @@ import "./ModelPreview.css";
 
 function HeadModel() {
   const geometry = useLoader(STLLoader, "/models/default-head.stl");
+  geometry.center();
+
   return (
-    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} scale={0.01}>
       <meshStandardMaterial color="#f4a582" />
     </mesh>
   );
@@ -17,11 +19,13 @@ function HeadModel() {
 
 function GlassesModel() {
   const geometry = useLoader(STLLoader, "/models/default-glasses.stl");
+  geometry.center();
   return (
     <mesh
       geometry={geometry}
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.5, 0.3]}
+      rotation={[0, Math.PI / 2, 0]}
+      position={[-0.875, 0.405, -0.025]}
+      scale={0.01}
     >
       <meshStandardMaterial color="#333333" metalness={0.8} roughness={0.2} />
     </mesh>
@@ -51,7 +55,7 @@ export default function ModelPreview({ selectedFrame, onBack, onContinue }) {
       </Notice>
 
       <div className="model-preview__viewer">
-        <Canvas camera={{ position: [0, 2, 5], fov: 50 }}>
+        <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
           <Suspense fallback={null}>
             <ambientLight intensity={0.5} />
             <directionalLight position={[10, 10, 5]} intensity={1} />
