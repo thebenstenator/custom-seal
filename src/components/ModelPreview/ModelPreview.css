@@ -151,6 +151,36 @@
   justify-content: center;
 }
 
+.scan-upload-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.scan-upload-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+  color: #374151;
+}
+
+.scan-upload-button:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.scan-upload-input {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .model-preview__container {
     grid-template-columns: 1fr;

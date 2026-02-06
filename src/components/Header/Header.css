@@ -7,6 +7,9 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header__brand {
@@ -17,6 +20,10 @@
   cursor: pointer;
 }
 
+.header__brand:hover .header__title {
+  color: #1d4ed8;
+}
+
 .header__icon {
   color: #2563eb;
 }
@@ -25,4 +32,69 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: #111827;
+  transition: color 0.2s;
+}
+
+.header__actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.header__button {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header__button--login {
+  background: transparent;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.header__button--login:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.header__button--signup {
+  background: #2563eb;
+  color: white;
+}
+
+.header__button--signup:hover {
+  background: #1d4ed8;
+}
+
+.header__button--account {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.header__button--account:hover {
+  background: #e5e7eb;
+}
+
+@media (max-width: 640px) {
+  .header__title {
+    font-size: 1.25rem;
+  }
+
+  .header__button {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .header__button span {
+    display: none;
+  }
 }

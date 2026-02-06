@@ -12,7 +12,8 @@ import "./App.css";
 
 export default function App() {
   const [selectedFrame, setSelectedFrame] = useState(null);
-  const [scanData, setScanData] = useState(null);
+  const [userScan, setuserScan] = useState(null);
+  const [glassesAlignment, setGlassesAlignment] = useState(null);
 
   return (
     <Router>
@@ -33,23 +34,30 @@ export default function App() {
                 }
               />
               <Route
-                path="/preview"
-                element={<ModelPreview selectedFrame={selectedFrame} />}
-              />
-              <Route
                 path="/scan"
                 element={
                   <ScanUpload
                     selectedFrame={selectedFrame}
-                    onSubmit={setScanData}
+                    onSubmit={setuserScan}
                   />
                 }
               />
               <Route
+                path="/preview"
+                element={
+                  <ModelPreview
+                    selectedFrame={selectedFrame}
+                    userScan={userScan}
+                    onSubmit={setGlassesAlignment}
+                  />
+                }
+              />
+
+              <Route
                 path="/confirmation"
                 element={
                   <Confirmation
-                    scanData={scanData}
+                    userScan={userScan}
                     selectedFrame={selectedFrame}
                   />
                 }

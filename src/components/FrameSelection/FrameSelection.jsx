@@ -5,18 +5,18 @@ import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./FrameSelection.css";
 
-export default function FrameSelection({ frames, onBack, onSelectFrame }) {
+export default function FrameSelection({ frames, onSelectFrame }) {
   const navigate = useNavigate();
 
   function handleFrameSelect(frame) {
     onSelectFrame(frame);
-    navigate("/preview");
+    navigate("/scan");
   }
 
   return (
     <div className="frames">
       <div className="page-header">
-        <Button variant="back" onClick={onBack}>
+        <Button variant="back" onClick={() => navigate("/")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Select Your Frame Style</h2>

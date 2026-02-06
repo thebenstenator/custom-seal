@@ -43,6 +43,9 @@ export default function Confirmation({ scanData, selectedFrame }) {
             <li>
               File Size: {(scanData.fileSize / 1024 / 1024).toFixed(2)} MB
             </li>
+            {glassesAlignment && (
+              <li>Glasses aligned and ready for processing</li>
+            )}
           </ul>
         </div>
 
