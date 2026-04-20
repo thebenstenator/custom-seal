@@ -1,6 +1,6 @@
-import React, { Suspense, useState, useRef, useEffect } from "react";
+import React, { Suspense, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { Upload } from "lucide-react";
 import * as THREE from "three";
 import { useAppStore } from "../../store/useAppStore";
@@ -74,14 +74,19 @@ function HardpointMarkers({ points }) {
   );
 }
 
-// Triggers seal generation after both meshes are in the scene
+// Watches sealTrigger from the store; runs generation on the next frame after trigger increments.
+// useFrame is the correct R3F pattern for reading mesh state from inside the Canvas.
 function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
-  const { scene } = useThree();
+  const sealTrigger = useAppStore((s) => s.sealTrigger);
+  const lastTrigger = useRef(-1);
 
-  useEffect(() => {
+  useFrame(() => {
+    if (sealTrigger === lastTrigger.current) return;
     const glasses = glassesMeshRef.current;
     const head = headMeshRef.current;
     if (!glasses || !head) return;
+
+    lastTrigger.current = sealTrigger;
 
     glasses.updateMatrixWorld(true);
     head.updateMatrixWorld(true);
@@ -89,14 +94,11 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
     const rawHardpoints = deriveHardpointsFromBbox(glasses.geometry);
     const worldHardpoints = transformHardpoints(rawHardpoints, glasses.matrixWorld);
 
-    const bvh = buildFaceBVH(head.geometry);
-    const sealGeometry = generateSeal(worldHardpoints, head, bvh);
+    buildFaceBVH(head.geometry);
+    const sealGeometry = generateSeal(worldHardpoints, head);
 
     onSealGenerated({ worldHardpoints, sealGeometry });
-  }, [
-    glassesMeshRef.current,
-    headMeshRef.current,
-  ]);
+  });
 
   return null;
 }
@@ -117,10 +119,11 @@ export default function ModelPreview() {
   const setGlassesScale    = useAppStore((s) => s.setGlassesScale);
   const setHeadRotation    = useAppStore((s) => s.setHeadRotation);
   const resetAlignment     = useAppStore((s) => s.resetAlignment);
-  const setHardpoints      = useAppStore((s) => s.setHardpoints);
-  const setGeneratedSeal   = useAppStore((s) => s.setGeneratedSeal);
-  const generatedSeal      = useAppStore((s) => s.generatedSeal);
-  const hardpoints         = useAppStore((s) => s.hardpoints);
+  const setHardpoints          = useAppStore((s) => s.setHardpoints);
+  const setGeneratedSeal       = useAppStore((s) => s.setGeneratedSeal);
+  const generatedSeal          = useAppStore((s) => s.generatedSeal);
+  const hardpoints             = useAppStore((s) => s.hardpoints);
+  const triggerSealGeneration  = useAppStore((s) => s.triggerSealGeneration);
 
   const [uploadedScan, setUploadedScan] = useState(userScan?.file || null);
   const [showHardpoints, setShowHardpoints] = useState(false);
@@ -329,15 +332,22 @@ export default function ModelPreview() {
 
           <div className="controls__actions">
             <button onClick={resetAlignment} className="controls__reset">
-              Reset to Default
+              Reset
             </button>
             <button
               onClick={() => setShowHardpoints((v) => !v)}
               className={`controls__toggle ${showHardpoints ? "controls__toggle--active" : ""}`}
             >
-              {showHardpoints ? "Hide" : "Show"} Hardpoints
+              {showHardpoints ? "Hide" : "Show"} Points
             </button>
           </div>
+
+          <button
+            onClick={triggerSealGeneration}
+            className="controls__generate"
+          >
+            Generate Seal Preview
+          </button>
         </div>
       </div>
 

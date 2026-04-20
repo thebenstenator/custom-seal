@@ -32,6 +32,9 @@ export const useAppStore = create((set) => ({
   setHardpoints: (hardpoints) => set({ hardpoints }),
   setGeneratedSeal: (geometry) => set({ generatedSeal: geometry }),
 
+  sealTrigger: 0,
+  triggerSealGeneration: () => set((s) => ({ sealTrigger: s.sealTrigger + 1 })),
+
   resetAlignment: () =>
     set({
       glassesPosition: DEFAULT_GLASSES_POSITION,

@@ -3,21 +3,22 @@ import { MeshBVH } from "three-mesh-bvh";
 import { DEFAULT_SEAL_LOOP } from "./hardpoints";
 
 /**
- * Builds a BVH accelerator on a face mesh geometry.
- * Call once after loading the face mesh; store the result.
+ * Assigns a BVH to the geometry so Three.js's patched raycast uses it.
+ * Call once after loading the face mesh. Safe to call multiple times (no-op if already built).
  */
 export function buildFaceBVH(geometry) {
+  if (geometry.boundsTree) return;
   geometry.computeVertexNormals();
-  return new MeshBVH(geometry);
+  geometry.boundsTree = new MeshBVH(geometry);
 }
 
 /**
  * For each hardpoint in world space, cast a ray toward the face mesh center
- * and return the surface intersection point. Points with no hit are skipped.
+ * and return the surface intersection point. Falls back to the hardpoint
+ * position itself if no hit is found (keeps the loop closed).
  */
-function castHardpointsToFace(worldHardpoints, sealLoop, faceMesh, bvh) {
+function castHardpointsToFace(worldHardpoints, sealLoop, faceMesh) {
   const faceCenter = new THREE.Vector3();
-  faceMesh.geometry.computeBoundingBox();
   faceMesh.geometry.boundingBox.getCenter(faceCenter);
   faceCenter.applyMatrix4(faceMesh.matrixWorld);
 
@@ -32,12 +33,7 @@ function castHardpointsToFace(worldHardpoints, sealLoop, faceMesh, bvh) {
     raycaster.set(origin, dir);
 
     const hits = raycaster.intersectObject(faceMesh, false);
-    if (hits.length > 0) {
-      surfacePoints.push(hits[0].point.clone());
-    } else {
-      // No hit — use the hardpoint itself as a fallback so the loop stays closed
-      surfacePoints.push(origin.clone());
-    }
+    surfacePoints.push(hits.length > 0 ? hits[0].point.clone() : origin.clone());
   }
 
   return surfacePoints;
@@ -45,34 +41,20 @@ function castHardpointsToFace(worldHardpoints, sealLoop, faceMesh, bvh) {
 
 /**
  * Generates a seal mesh (TubeGeometry) from world-space hardpoints + face mesh.
- *
- * Returns a THREE.BufferGeometry, or null if fewer than 3 points were resolved.
+ * Assumes buildFaceBVH has already been called on faceMesh.geometry.
+ * Returns a THREE.BufferGeometry, or null if fewer than 3 points resolved.
  */
-export function generateSeal(worldHardpoints, faceMesh, bvh, options = {}) {
+export function generateSeal(worldHardpoints, faceMesh, options = {}) {
   const {
     sealLoop = DEFAULT_SEAL_LOOP,
-    tubeRadius = 0.03,      // ~3mm wall in scene units
+    tubeRadius = 0.03,
     tubularSegments = 64,
     radialSegments = 8,
   } = options;
 
-  const surfacePoints = castHardpointsToFace(
-    worldHardpoints,
-    sealLoop,
-    faceMesh,
-    bvh,
-  );
-
+  const surfacePoints = castHardpointsToFace(worldHardpoints, sealLoop, faceMesh);
   if (surfacePoints.length < 3) return null;
 
-  const curve = new THREE.CatmullRomCurve3(surfacePoints, true /* closed */);
-  const geometry = new THREE.TubeGeometry(
-    curve,
-    tubularSegments,
-    tubeRadius,
-    radialSegments,
-    true, /* closed */
-  );
-
-  return geometry;
+  const curve = new THREE.CatmullRomCurve3(surfacePoints, true);
+  return new THREE.TubeGeometry(curve, tubularSegments, tubeRadius, radialSegments, true);
 }
