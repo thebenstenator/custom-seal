@@ -91,11 +91,26 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
     glasses.updateMatrixWorld(true);
     head.updateMatrixWorld(true);
 
+    const bb = glasses.geometry.boundingBox;
+    console.log("[CustomSeal] glasses bbox", {
+      x: [bb.min.x.toFixed(2), bb.max.x.toFixed(2)],
+      y: [bb.min.y.toFixed(2), bb.max.y.toFixed(2)],
+      z: [bb.min.z.toFixed(2), bb.max.z.toFixed(2)],
+    });
+
     const rawHardpoints = deriveHardpointsFromBbox(glasses.geometry);
     const worldHardpoints = transformHardpoints(rawHardpoints, glasses.matrixWorld);
 
+    console.log("[CustomSeal] world hardpoints",
+      Object.fromEntries(Object.entries(worldHardpoints).map(([k, v]) =>
+        [k, [v.x.toFixed(3), v.y.toFixed(3), v.z.toFixed(3)]]
+      ))
+    );
+
     buildFaceBVH(head.geometry);
     const sealGeometry = generateSeal(worldHardpoints, head);
+
+    console.log("[CustomSeal] seal geometry", sealGeometry ? "generated" : "null — fewer than 3 ray hits");
 
     onSealGenerated({ worldHardpoints, sealGeometry });
   });
