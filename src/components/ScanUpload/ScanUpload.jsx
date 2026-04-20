@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Upload, ExternalLink } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import SceneCanvas from "../shared/SceneCanvas";
@@ -35,10 +35,7 @@ export default function ScanUpload() {
   const navigate = useNavigate();
   const selectedFrame = useAppStore((s) => s.selectedFrame);
 
-  if (!selectedFrame) {
-    navigate("/frames");
-    return null;
-  }
+  if (!selectedFrame) return <Navigate to="/frames" replace />;
 
   return (
     <div className="scan-upload">
@@ -152,12 +149,12 @@ export default function ScanUpload() {
             <p className="upload-area__title">Upload Feature Coming Soon</p>
             <p className="upload-area__subtitle">
               We're working on optimizing the upload and processing pipeline.
-              For now, explore the demo with the preview above!
+              Continue below to try the alignment tool with a demo head model.
             </p>
           </div>
 
-          <Button variant="primary" fullWidth onClick={() => {}} disabled={true}>
-            Coming Soon
+          <Button variant="primary" fullWidth onClick={() => navigate("/preview")}>
+            Continue to Alignment (Demo)
           </Button>
         </div>
       </div>

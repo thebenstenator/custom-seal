@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import { useAppStore } from "../../store/useAppStore";
@@ -11,10 +11,7 @@ export default function Confirmation() {
   const userScan = useAppStore((s) => s.userScan);
   const glassesPosition = useAppStore((s) => s.glassesPosition);
 
-  if (!selectedFrame) {
-    navigate("/frames");
-    return null;
-  }
+  if (!selectedFrame) return <Navigate to="/frames" replace />;
 
   return (
     <div className="confirmation">

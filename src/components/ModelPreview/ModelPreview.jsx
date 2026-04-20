@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useFrame } from "@react-three/fiber";
 import { Upload } from "lucide-react";
 import * as THREE from "three";
@@ -131,10 +131,7 @@ export default function ModelPreview() {
   const glassesMeshRef = useRef(null);
   const headMeshRef    = useRef(null);
 
-  if (!selectedFrame) {
-    navigate("/frames");
-    return null;
-  }
+  if (!selectedFrame) return <Navigate to="/frames" replace />;
 
   const handleScanUpload = (e) => {
     const file = e.target.files[0];
