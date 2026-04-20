@@ -7,32 +7,46 @@ import * as THREE from "three";
  * Points sit at the back face (maxZ) of the bounding box so they face
  * toward the user's face.
  */
+/**
+ * Derives hardpoints from the glasses bounding box.
+ *
+ * The default-glasses STL sits in local space with:
+ *   Z = left-right (width of frame) — becomes world X after rotation=[0, PI/2, 0]
+ *   Y = up-down
+ *   X = depth (front-to-back of frame); bb.min.x is the face-side edge
+ *
+ * This assumption holds for any frame exported under the same convention.
+ * Artist-supplied GLBs override this entirely with named hp_ nodes.
+ */
 export function deriveHardpointsFromBbox(geometry) {
   geometry.computeBoundingBox();
   const bb = geometry.boundingBox;
 
-  const minX = bb.min.x, maxX = bb.max.x;
-  const minY = bb.min.y, maxY = bb.max.y;
-  const midZ = (bb.min.z + bb.max.z) / 2;
+  // Face-side depth: the back edge of the frame that sits closest to the skin
+  const faceX = bb.min.x;
 
-  const midX = (minX + maxX) / 2;
-  const lensW = (maxX - minX) / 2;
+  const minZ = bb.min.z, maxZ = bb.max.z;
+  const minY = bb.min.y, maxY = bb.max.y;
+  const midZ = (minZ + maxZ) / 2;
+  const lensW = (maxZ - minZ) / 2;
   const noseOffset = lensW * 0.12;
 
   return {
-    hp_left_outer_top:    new THREE.Vector3(minX,                  maxY, midZ),
-    hp_left_outer_bottom: new THREE.Vector3(minX,                  minY, midZ),
-    hp_left_inner_top:    new THREE.Vector3(midX - noseOffset * 2, maxY, midZ),
-    hp_left_inner_bottom: new THREE.Vector3(midX - noseOffset * 2, minY, midZ),
-    hp_right_inner_top:   new THREE.Vector3(midX + noseOffset * 2, maxY, midZ),
-    hp_right_inner_bottom:new THREE.Vector3(midX + noseOffset * 2, minY, midZ),
-    hp_right_outer_top:   new THREE.Vector3(maxX,                  maxY, midZ),
-    hp_right_outer_bottom:new THREE.Vector3(maxX,                  minY, midZ),
-    hp_nose_left:         new THREE.Vector3(midX - noseOffset,     minY, midZ),
-    hp_nose_right:        new THREE.Vector3(midX + noseOffset,     minY, midZ),
+    hp_left_outer_top:     new THREE.Vector3(faceX, maxY, minZ),
+    hp_left_outer_bottom:  new THREE.Vector3(faceX, minY, minZ),
+    hp_left_inner_top:     new THREE.Vector3(faceX, maxY, midZ - noseOffset * 2),
+    hp_left_inner_bottom:  new THREE.Vector3(faceX, minY, midZ - noseOffset * 2),
+    hp_right_inner_top:    new THREE.Vector3(faceX, maxY, midZ + noseOffset * 2),
+    hp_right_inner_bottom: new THREE.Vector3(faceX, minY, midZ + noseOffset * 2),
+    hp_right_outer_top:    new THREE.Vector3(faceX, maxY, maxZ),
+    hp_right_outer_bottom: new THREE.Vector3(faceX, minY, maxZ),
+    hp_nose_left:          new THREE.Vector3(faceX, minY, midZ - noseOffset),
+    hp_nose_right:         new THREE.Vector3(faceX, minY, midZ + noseOffset),
   };
 }
 
+// Full perimeter loop: left outer (top→bottom) → across bottom (nose bridge) →
+// right outer (bottom→top) → across top → closes back to left outer top.
 export const DEFAULT_SEAL_LOOP = [
   "hp_left_outer_top",
   "hp_left_outer_bottom",
@@ -42,6 +56,8 @@ export const DEFAULT_SEAL_LOOP = [
   "hp_right_inner_bottom",
   "hp_right_outer_bottom",
   "hp_right_outer_top",
+  "hp_right_inner_top",
+  "hp_left_inner_top",
 ];
 
 /**
