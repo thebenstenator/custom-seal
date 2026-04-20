@@ -1,49 +1,27 @@
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Canvas, useLoader } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
+import { useThree } from "@react-three/fiber";
 import { Upload } from "lucide-react";
 import * as THREE from "three";
+import { useAppStore } from "../../store/useAppStore";
+import SceneCanvas from "../shared/SceneCanvas";
+import { useSTLModel, useUploadedModel } from "../../hooks/useSTLModel";
+import { deriveHardpointsFromBbox, transformHardpoints } from "../../utils/geometry/hardpoints";
+import { buildFaceBVH, generateSeal } from "../../utils/geometry/sealGenerator";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ModelPreview.css";
 
-function HeadModel({ scanFile, rotation }) {
-  let geometry;
+// --- Scene sub-components ---
 
-  if (scanFile) {
-    // User uploaded scan
-    const fileUrl = React.useMemo(() => {
-      return URL.createObjectURL(scanFile);
-    }, [scanFile]);
-
-    geometry = useLoader(STLLoader, fileUrl);
-
-    React.useEffect(() => {
-      if (geometry) {
-        geometry.computeBoundingBox();
-        console.log("User scan bounding box:", geometry.boundingBox);
-        const size = new THREE.Vector3();
-        geometry.boundingBox.getSize(size);
-        console.log("User scan size:", size);
-      }
-    }, [geometry]);
-
-    React.useEffect(() => {
-      return () => {
-        URL.revokeObjectURL(fileUrl);
-      };
-    }, [fileUrl]);
-  } else {
-    // Default head model
-    geometry = useLoader(STLLoader, "/models/default-head.stl");
-  }
-
-  geometry.center();
+function HeadModel({ scanFile, rotation, meshRef }) {
+  const geometry = scanFile
+    ? useUploadedModel(scanFile)
+    : useSTLModel("/models/default-head.stl");
 
   return (
     <mesh
+      ref={meshRef}
       geometry={geometry}
       rotation={[-Math.PI / 2, rotation[1], rotation[2]]}
       scale={0.01}
@@ -53,11 +31,11 @@ function HeadModel({ scanFile, rotation }) {
   );
 }
 
-function GlassesModel({ position, rotation, scale }) {
-  const geometry = useLoader(STLLoader, "/models/default-glasses.stl");
-  geometry.center();
+function GlassesModel({ position, rotation, scale, meshRef }) {
+  const geometry = useSTLModel("/models/default-glasses.stl");
   return (
     <mesh
+      ref={meshRef}
       geometry={geometry}
       rotation={rotation}
       position={position}
@@ -68,21 +46,88 @@ function GlassesModel({ position, rotation, scale }) {
   );
 }
 
-export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
+function SealPreview({ geometry }) {
+  if (!geometry) return null;
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        color="#60a5fa"
+        transparent
+        opacity={0.6}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function HardpointMarkers({ points }) {
+  if (!points) return null;
+  return (
+    <>
+      {Object.values(points).map((pos, i) => (
+        <mesh key={i} position={pos}>
+          <sphereGeometry args={[0.015, 8, 8]} />
+          <meshStandardMaterial color="#f59e0b" />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+// Triggers seal generation after both meshes are in the scene
+function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const glasses = glassesMeshRef.current;
+    const head = headMeshRef.current;
+    if (!glasses || !head) return;
+
+    glasses.updateMatrixWorld(true);
+    head.updateMatrixWorld(true);
+
+    const rawHardpoints = deriveHardpointsFromBbox(glasses.geometry);
+    const worldHardpoints = transformHardpoints(rawHardpoints, glasses.matrixWorld);
+
+    const bvh = buildFaceBVH(head.geometry);
+    const sealGeometry = generateSeal(worldHardpoints, head, bvh);
+
+    onSealGenerated({ worldHardpoints, sealGeometry });
+  }, [
+    glassesMeshRef.current,
+    headMeshRef.current,
+  ]);
+
+  return null;
+}
+
+// --- Main component ---
+
+export default function ModelPreview() {
   const navigate = useNavigate();
 
-  // Head scan state
+  const selectedFrame   = useAppStore((s) => s.selectedFrame);
+  const userScan        = useAppStore((s) => s.userScan);
+  const glassesPosition = useAppStore((s) => s.glassesPosition);
+  const glassesRotation = useAppStore((s) => s.glassesRotation);
+  const glassesScale    = useAppStore((s) => s.glassesScale);
+  const headRotation    = useAppStore((s) => s.headRotation);
+  const setGlassesPosition = useAppStore((s) => s.setGlassesPosition);
+  const setGlassesRotation = useAppStore((s) => s.setGlassesRotation);
+  const setGlassesScale    = useAppStore((s) => s.setGlassesScale);
+  const setHeadRotation    = useAppStore((s) => s.setHeadRotation);
+  const resetAlignment     = useAppStore((s) => s.resetAlignment);
+  const setHardpoints      = useAppStore((s) => s.setHardpoints);
+  const setGeneratedSeal   = useAppStore((s) => s.setGeneratedSeal);
+  const generatedSeal      = useAppStore((s) => s.generatedSeal);
+  const hardpoints         = useAppStore((s) => s.hardpoints);
+
   const [uploadedScan, setUploadedScan] = useState(userScan?.file || null);
-  const [headRotation, setHeadRotation] = useState([0, 0, 0]);
+  const [showHardpoints, setShowHardpoints] = useState(false);
 
-  // Glasses positioning state
-  const [glassesPosition, setGlassesPosition] = useState([
-    -0.875, 0.405, -0.025,
-  ]);
-  const [glassesRotation, setGlassesRotation] = useState([0, Math.PI / 2, 0]);
-  const [glassesScale, setGlassesScale] = useState(0.01);
+  const glassesMeshRef = useRef(null);
+  const headMeshRef    = useRef(null);
 
-  // Redirect if missing required data
   if (!selectedFrame) {
     navigate("/frames");
     return null;
@@ -90,60 +135,35 @@ export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
 
   const handleScanUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const validExtensions = [".obj", ".ply", ".stl", ".glb", ".gltf"];
-      const extension = "." + file.name.split(".").pop().toLowerCase();
-
-      if (validExtensions.includes(extension)) {
-        setUploadedScan(file);
-      } else {
-        alert(
-          "Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.",
-        );
-      }
+    if (!file) return;
+    const validExtensions = [".obj", ".ply", ".stl", ".glb", ".gltf"];
+    const ext = "." + file.name.split(".").pop().toLowerCase();
+    if (validExtensions.includes(ext)) {
+      setUploadedScan(file);
+    } else {
+      alert("Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.");
     }
   };
 
-  const handleHeadRotationChange = (axis, value) => {
-    const newRotation = [...headRotation];
-    const axisIndex = { x: 0, y: 1, z: 2 }[axis];
-    newRotation[axisIndex] = parseFloat(value);
-    setHeadRotation(newRotation);
-  };
-
   const handlePositionChange = (axis, value) => {
-    const newPosition = [...glassesPosition];
-    const axisIndex = { x: 0, y: 1, z: 2 }[axis];
-    newPosition[axisIndex] = parseFloat(value);
-    setGlassesPosition(newPosition);
+    const next = [...glassesPosition];
+    next[{ x: 0, y: 1, z: 2 }[axis]] = parseFloat(value);
+    setGlassesPosition(next);
   };
 
   const handleRotationChange = (axis, value) => {
-    const newRotation = [...glassesRotation];
-    const axisIndex = { x: 0, y: 1, z: 2 }[axis];
-    newRotation[axisIndex] = parseFloat(value);
-    setGlassesRotation(newRotation);
+    const next = [...glassesRotation];
+    next[{ x: 0, y: 1, z: 2 }[axis]] = parseFloat(value);
+    setGlassesRotation(next);
   };
 
-  const handleScaleChange = (value) => {
-    setGlassesScale(parseFloat(value));
-  };
-
-  const resetPosition = () => {
-    setGlassesPosition([-0.875, 0.405, -0.025]);
-    setGlassesRotation([0, Math.PI / 2, 0]);
-    setGlassesScale(0.01);
-    setHeadRotation([0, 0, 0]);
+  const handleHeadRotationChange = (axis, value) => {
+    const next = [...headRotation];
+    next[{ x: 0, y: 1, z: 2 }[axis]] = parseFloat(value);
+    setHeadRotation(next);
   };
 
   const handleContinue = () => {
-    onSubmit({
-      position: glassesPosition,
-      rotation: glassesRotation,
-      scale: glassesScale,
-      headRotation: headRotation,
-      usedCustomScan: !!uploadedScan,
-    });
     navigate("/confirmation");
   };
 
@@ -162,23 +182,15 @@ export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
         </p>
       </div>
 
-      {!uploadedScan ? (
-        <Notice variant="info">
-          <p className="notice__text">
-            <strong>Demo Mode:</strong> This is a generic head model for
-            demonstration. For a custom fit, upload your 3D face scan below,
-            then position the glasses exactly where they would sit on your face.
-          </p>
-        </Notice>
-      ) : (
-        <Notice variant="info">
-          <p className="notice__text">
-            <strong>Your scan is loaded!</strong> Position the glasses exactly
-            where they would sit on your face. This alignment will be used to
-            generate your custom moisture chamber seal.
-          </p>
-        </Notice>
-      )}
+      <Notice variant="info">
+        <p className="notice__text">
+          {uploadedScan ? (
+            <><strong>Your scan is loaded!</strong> Position the glasses exactly where they sit on your face.</>
+          ) : (
+            <><strong>Demo Mode:</strong> Generic head model. Upload your face scan below for a custom fit.</>
+          )}
+        </p>
+      </Notice>
 
       {!uploadedScan && (
         <div className="scan-upload-section">
@@ -197,24 +209,32 @@ export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
 
       <div className="model-preview__container">
         <div className="model-preview__viewer">
-          <Canvas camera={{ position: [0, 0, 7.5], fov: 50 }}>
-            <Suspense fallback={null}>
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[10, 10, 5]} intensity={1} />
-              <directionalLight position={[-10, -10, -5]} intensity={0.3} />
+          <SceneCanvas cameraPosition={[0, 0, 7.5]}>
+            <group rotation={[0, Math.PI / 2, 0]}>
+              <HeadModel
+                scanFile={uploadedScan}
+                rotation={headRotation}
+                meshRef={headMeshRef}
+              />
+              <GlassesModel
+                position={glassesPosition}
+                rotation={glassesRotation}
+                scale={glassesScale}
+                meshRef={glassesMeshRef}
+              />
+              <SealPreview geometry={generatedSeal} />
+              {showHardpoints && <HardpointMarkers points={hardpoints} />}
+            </group>
 
-              <group rotation={[0, Math.PI / 2, 0]}>
-                <HeadModel scanFile={uploadedScan} rotation={headRotation} />
-                <GlassesModel
-                  position={glassesPosition}
-                  rotation={glassesRotation}
-                  scale={glassesScale}
-                />
-              </group>
-
-              <OrbitControls enableZoom={true} enablePan={false} />
-            </Suspense>
-          </Canvas>
+            <SealGenerator
+              glassesMeshRef={glassesMeshRef}
+              headMeshRef={headMeshRef}
+              onSealGenerated={({ worldHardpoints, sealGeometry }) => {
+                setHardpoints(worldHardpoints);
+                setGeneratedSeal(sealGeometry);
+              }}
+            />
+          </SceneCanvas>
           <p className="model-preview__instructions">
             Drag to rotate • Scroll to zoom
           </p>
@@ -225,154 +245,69 @@ export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
 
           <div className="control-group">
             <h4 className="control-group__label">Head Orientation</h4>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Rotate Y</span>
-                <input
-                  type="range"
-                  min={-Math.PI}
-                  max={Math.PI}
-                  step="0.01"
-                  value={headRotation[1]}
-                  onChange={(e) =>
-                    handleHeadRotationChange("y", e.target.value)
-                  }
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {headRotation[1].toFixed(2)}
-                </span>
-              </label>
-            </div>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Rotate Z</span>
-                <input
-                  type="range"
-                  min={-Math.PI}
-                  max={Math.PI}
-                  step="0.01"
-                  value={headRotation[2]}
-                  onChange={(e) =>
-                    handleHeadRotationChange("z", e.target.value)
-                  }
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {headRotation[2].toFixed(2)}
-                </span>
-              </label>
-            </div>
+            {[["Rotate Y", "y", headRotation[1]], ["Rotate Z", "z", headRotation[2]]].map(
+              ([label, axis, val]) => (
+                <div className="control-row" key={axis}>
+                  <label className="control">
+                    <span className="control__label">{label}</span>
+                    <input
+                      type="range"
+                      min={-Math.PI} max={Math.PI} step="0.01"
+                      value={val}
+                      onChange={(e) => handleHeadRotationChange(axis, e.target.value)}
+                      className="control__slider"
+                    />
+                    <span className="control__value">{val.toFixed(2)}</span>
+                  </label>
+                </div>
+              )
+            )}
           </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Position</h4>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Forward/Back</span>
-                <input
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="0.01"
-                  value={glassesPosition[0]}
-                  onChange={(e) => handlePositionChange("x", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesPosition[0].toFixed(2)}
-                </span>
-              </label>
-            </div>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Up/Down</span>
-                <input
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="0.01"
-                  value={glassesPosition[1]}
-                  onChange={(e) => handlePositionChange("y", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesPosition[1].toFixed(2)}
-                </span>
-              </label>
-            </div>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Left/Right</span>
-                <input
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="0.01"
-                  value={glassesPosition[2]}
-                  onChange={(e) => handlePositionChange("z", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesPosition[2].toFixed(2)}
-                </span>
-              </label>
-            </div>
+            {[
+              ["Forward/Back", "x", glassesPosition[0]],
+              ["Up/Down",      "y", glassesPosition[1]],
+              ["Left/Right",   "z", glassesPosition[2]],
+            ].map(([label, axis, val]) => (
+              <div className="control-row" key={axis}>
+                <label className="control">
+                  <span className="control__label">{label}</span>
+                  <input
+                    type="range"
+                    min="-2" max="2" step="0.01"
+                    value={val}
+                    onChange={(e) => handlePositionChange(axis, e.target.value)}
+                    className="control__slider"
+                  />
+                  <span className="control__value">{val.toFixed(2)}</span>
+                </label>
+              </div>
+            ))}
           </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Rotation</h4>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Tilt X</span>
-                <input
-                  type="range"
-                  min="0"
-                  max={Math.PI * 2}
-                  step="0.01"
-                  value={glassesRotation[0]}
-                  onChange={(e) => handleRotationChange("x", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesRotation[0].toFixed(2)}
-                </span>
-              </label>
-            </div>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Tilt Y</span>
-                <input
-                  type="range"
-                  min="0"
-                  max={Math.PI * 2}
-                  step="0.01"
-                  value={glassesRotation[1]}
-                  onChange={(e) => handleRotationChange("y", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesRotation[1].toFixed(2)}
-                </span>
-              </label>
-            </div>
-            <div className="control-row">
-              <label className="control">
-                <span className="control__label">Tilt Z</span>
-                <input
-                  type="range"
-                  min="0"
-                  max={Math.PI * 2}
-                  step="0.01"
-                  value={glassesRotation[2]}
-                  onChange={(e) => handleRotationChange("z", e.target.value)}
-                  className="control__slider"
-                />
-                <span className="control__value">
-                  {glassesRotation[2].toFixed(2)}
-                </span>
-              </label>
-            </div>
+            {[
+              ["Tilt X", "x", glassesRotation[0]],
+              ["Tilt Y", "y", glassesRotation[1]],
+              ["Tilt Z", "z", glassesRotation[2]],
+            ].map(([label, axis, val]) => (
+              <div className="control-row" key={axis}>
+                <label className="control">
+                  <span className="control__label">{label}</span>
+                  <input
+                    type="range"
+                    min="0" max={Math.PI * 2} step="0.01"
+                    value={val}
+                    onChange={(e) => handleRotationChange(axis, e.target.value)}
+                    className="control__slider"
+                  />
+                  <span className="control__value">{val.toFixed(2)}</span>
+                </label>
+              </div>
+            ))}
           </div>
 
           <div className="control-group">
@@ -382,23 +317,27 @@ export default function ModelPreview({ selectedFrame, userScan, onSubmit }) {
                 <span className="control__label">Size</span>
                 <input
                   type="range"
-                  min="0.005"
-                  max="0.02"
-                  step="0.001"
+                  min="0.005" max="0.02" step="0.001"
                   value={glassesScale}
-                  onChange={(e) => handleScaleChange(e.target.value)}
+                  onChange={(e) => setGlassesScale(parseFloat(e.target.value))}
                   className="control__slider"
                 />
-                <span className="control__value">
-                  {glassesScale.toFixed(3)}
-                </span>
+                <span className="control__value">{glassesScale.toFixed(3)}</span>
               </label>
             </div>
           </div>
 
-          <button onClick={resetPosition} className="controls__reset">
-            Reset to Default
-          </button>
+          <div className="controls__actions">
+            <button onClick={resetAlignment} className="controls__reset">
+              Reset to Default
+            </button>
+            <button
+              onClick={() => setShowHardpoints((v) => !v)}
+              className={`controls__toggle ${showHardpoints ? "controls__toggle--active" : ""}`}
+            >
+              {showHardpoints ? "Hide" : "Show"} Hardpoints
+            </button>
+          </div>
         </div>
       </div>
 

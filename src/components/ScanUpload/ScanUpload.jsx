@@ -1,16 +1,15 @@
-import React, { useState, Suspense } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Canvas, useLoader } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
-import { Upload, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { Upload, ExternalLink } from "lucide-react";
+import { useAppStore } from "../../store/useAppStore";
+import SceneCanvas from "../shared/SceneCanvas";
+import { useSTLModel } from "../../hooks/useSTLModel";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ScanUpload.css";
 
 function DefaultHeadModel() {
-  const geometry = useLoader(STLLoader, "/models/default-head.stl");
-  geometry.center();
+  const geometry = useSTLModel("/models/default-head.stl");
   return (
     <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} scale={0.01}>
       <meshStandardMaterial color="#f4a582" />
@@ -19,8 +18,7 @@ function DefaultHeadModel() {
 }
 
 function GlassesModel() {
-  const geometry = useLoader(STLLoader, "/models/default-glasses.stl");
-  geometry.center();
+  const geometry = useSTLModel("/models/default-glasses.stl");
   return (
     <mesh
       geometry={geometry}
@@ -33,45 +31,14 @@ function GlassesModel() {
   );
 }
 
-export default function ScanUpload({ selectedFrame, onSubmit }) {
+export default function ScanUpload() {
   const navigate = useNavigate();
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [error, setError] = useState(null);
+  const selectedFrame = useAppStore((s) => s.selectedFrame);
 
   if (!selectedFrame) {
     navigate("/frames");
     return null;
   }
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setError(null);
-
-    if (!file) return;
-
-    const validExtensions = [".obj", ".ply", ".stl", ".glb", ".gltf"];
-    const extension = "." + file.name.split(".").pop().toLowerCase();
-
-    if (!validExtensions.includes(extension)) {
-      setError(
-        "Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.",
-      );
-      return;
-    }
-
-    setUploadedFile(file);
-  };
-
-  const handleSubmit = () => {
-    if (uploadedFile) {
-      onSubmit({
-        fileName: uploadedFile.name,
-        fileSize: uploadedFile.size,
-        file: uploadedFile,
-      });
-      navigate("/preview");
-    }
-  };
 
   return (
     <div className="scan-upload">
@@ -94,26 +61,17 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
         </p>
       </Notice>
 
-      {/* 3D Preview */}
       <div className="scan-upload__preview">
         <h3 className="scan-upload__preview-title">
           Preview: {selectedFrame.name}
         </h3>
         <div className="scan-upload__viewer">
-          <Canvas camera={{ position: [0, 0, 4.5], fov: 50 }}>
-            <Suspense fallback={null}>
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[10, 10, 5]} intensity={1} />
-              <directionalLight position={[-10, -10, -5]} intensity={0.3} />
-
-              <group rotation={[0, Math.PI / 2, 0]}>
-                <DefaultHeadModel />
-                <GlassesModel />
-              </group>
-
-              <OrbitControls enableZoom={true} enablePan={false} />
-            </Suspense>
-          </Canvas>
+          <SceneCanvas>
+            <group rotation={[0, Math.PI / 2, 0]}>
+              <DefaultHeadModel />
+              <GlassesModel />
+            </group>
+          </SceneCanvas>
           <p className="scan-upload__viewer-instructions">
             Drag to rotate • Scroll to zoom
           </p>
@@ -125,7 +83,6 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
       </div>
 
       <div className="scan-upload__content">
-        {/* Scanning Instructions */}
         <div className="scan-instructions">
           <h3 className="scan-instructions__title">How to Scan Your Face</h3>
 
@@ -187,7 +144,6 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
           </div>
         </div>
 
-        {/* Upload Area */}
         <div className="scan-upload__form">
           <h3 className="scan-upload__form-title">Upload Your Face Scan</h3>
 
@@ -200,12 +156,7 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
             </p>
           </div>
 
-          <Button
-            variant="primary"
-            fullWidth
-            onClick={() => {}}
-            disabled={true}
-          >
+          <Button variant="primary" fullWidth onClick={() => {}} disabled={true}>
             Coming Soon
           </Button>
         </div>

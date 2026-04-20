@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Header from "./components/Header/Header";
 import Footer from "./components/Footer/Footer";
@@ -11,10 +11,6 @@ import { frames } from "./data/frames";
 import "./App.css";
 
 export default function App() {
-  const [selectedFrame, setSelectedFrame] = useState(null);
-  const [userScan, setuserScan] = useState(null);
-  const [glassesAlignment, setGlassesAlignment] = useState(null);
-
   return (
     <Router>
       <div className="app">
@@ -26,42 +22,11 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route
                 path="/frames"
-                element={
-                  <FrameSelection
-                    frames={frames}
-                    onSelectFrame={setSelectedFrame}
-                  />
-                }
+                element={<FrameSelection frames={frames} />}
               />
-              <Route
-                path="/scan"
-                element={
-                  <ScanUpload
-                    selectedFrame={selectedFrame}
-                    onSubmit={setuserScan}
-                  />
-                }
-              />
-              <Route
-                path="/preview"
-                element={
-                  <ModelPreview
-                    selectedFrame={selectedFrame}
-                    userScan={userScan}
-                    onSubmit={setGlassesAlignment}
-                  />
-                }
-              />
-
-              <Route
-                path="/confirmation"
-                element={
-                  <Confirmation
-                    userScan={userScan}
-                    selectedFrame={selectedFrame}
-                  />
-                }
-              />
+              <Route path="/scan" element={<ScanUpload />} />
+              <Route path="/preview" element={<ModelPreview />} />
+              <Route path="/confirmation" element={<Confirmation />} />
             </Routes>
           </div>
         </main>

@@ -2,15 +2,20 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
+import { useAppStore } from "../../store/useAppStore";
 import "./Confirmation.css";
 
-export default function Confirmation({ scanData, selectedFrame }) {
+export default function Confirmation() {
   const navigate = useNavigate();
+  const selectedFrame = useAppStore((s) => s.selectedFrame);
+  const userScan = useAppStore((s) => s.userScan);
+  const glassesPosition = useAppStore((s) => s.glassesPosition);
 
-  if (!scanData || !selectedFrame) {
-    navigate("/scan");
+  if (!selectedFrame) {
+    navigate("/frames");
     return null;
   }
+
   return (
     <div className="confirmation">
       <div className="confirmation__card">
@@ -39,11 +44,13 @@ export default function Confirmation({ scanData, selectedFrame }) {
           <h3 className="confirmation__details-title">Submission Summary:</h3>
           <ul className="confirmation__list">
             <li>Frame Style: {selectedFrame.name}</li>
-            <li>Scan File: {scanData.fileName}</li>
-            <li>
-              File Size: {(scanData.fileSize / 1024 / 1024).toFixed(2)} MB
-            </li>
-            {glassesAlignment && (
+            {userScan && <li>Scan File: {userScan.fileName}</li>}
+            {userScan && (
+              <li>
+                File Size: {(userScan.fileSize / 1024 / 1024).toFixed(2)} MB
+              </li>
+            )}
+            {glassesPosition && (
               <li>Glasses aligned and ready for processing</li>
             )}
           </ul>
