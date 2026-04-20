@@ -100,7 +100,7 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
           Preview: {selectedFrame.name}
         </h3>
         <div className="scan-upload__viewer">
-          <Canvas camera={{ position: [0, 0, 7.5], fov: 50 }}>
+          <Canvas camera={{ position: [0, 0, 4.5], fov: 50 }}>
             <Suspense fallback={null}>
               <ambientLight intensity={0.5} />
               <directionalLight position={[10, 10, 5]} intensity={1} />
@@ -191,53 +191,22 @@ export default function ScanUpload({ selectedFrame, onSubmit }) {
         <div className="scan-upload__form">
           <h3 className="scan-upload__form-title">Upload Your Face Scan</h3>
 
-          {!uploadedFile ? (
-            <label className="upload-area">
-              <Upload className="upload-area__icon" size={48} />
-              <p className="upload-area__title">
-                Drag and drop your 3D scan here
-              </p>
-              <p className="upload-area__subtitle">or click to browse</p>
-              <p className="upload-area__formats">
-                Supported formats: OBJ, PLY, STL, GLB, GLTF
-              </p>
-              <input
-                type="file"
-                accept=".obj,.ply,.stl,.glb,.gltf"
-                onChange={handleFileChange}
-                className="upload-area__input"
-              />
-            </label>
-          ) : (
-            <div className="upload-success">
-              <CheckCircle className="upload-success__icon" size={48} />
-              <p className="upload-success__title">{uploadedFile.name}</p>
-              <p className="upload-success__size">
-                {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-              <button
-                className="upload-success__change"
-                onClick={() => setUploadedFile(null)}
-              >
-                Change file
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <div className="upload-error">
-              <AlertCircle className="upload-error__icon" size={20} />
-              <p className="upload-error__text">{error}</p>
-            </div>
-          )}
+          <div className="upload-area upload-area--disabled">
+            <Upload className="upload-area__icon" size={48} />
+            <p className="upload-area__title">Upload Feature Coming Soon</p>
+            <p className="upload-area__subtitle">
+              We're working on optimizing the upload and processing pipeline.
+              For now, explore the demo with the preview above!
+            </p>
+          </div>
 
           <Button
             variant="primary"
             fullWidth
-            onClick={handleSubmit}
-            disabled={!uploadedFile}
+            onClick={() => {}}
+            disabled={true}
           >
-            Continue to Position Glasses
+            Coming Soon
           </Button>
         </div>
       </div>

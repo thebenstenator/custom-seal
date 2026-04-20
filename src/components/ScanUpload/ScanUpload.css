@@ -254,6 +254,20 @@
   font-size: 0.875rem;
 }
 
+.upload-area--disabled {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+.upload-area--disabled .upload-area__icon {
+  color: #9ca3af;
+}
+
+.upload-area--disabled .upload-area__title {
+  color: #6b7280;
+}
+
 @media (max-width: 1024px) {
   .scan-upload__content {
     grid-template-columns: 1fr;

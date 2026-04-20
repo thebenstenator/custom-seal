@@ -4,6 +4,7 @@ import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
 import { Upload } from "lucide-react";
+import * as THREE from "three";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ModelPreview.css";
@@ -18,6 +19,16 @@ function HeadModel({ scanFile, rotation }) {
     }, [scanFile]);
 
     geometry = useLoader(STLLoader, fileUrl);
+
+    React.useEffect(() => {
+      if (geometry) {
+        geometry.computeBoundingBox();
+        console.log("User scan bounding box:", geometry.boundingBox);
+        const size = new THREE.Vector3();
+        geometry.boundingBox.getSize(size);
+        console.log("User scan size:", size);
+      }
+    }, [geometry]);
 
     React.useEffect(() => {
       return () => {
