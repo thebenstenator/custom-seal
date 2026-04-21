@@ -4,44 +4,39 @@ import * as THREE from "three";
  * Derives approximate hardpoints from a glasses geometry bounding box.
  * Used as a fallback when a frame has no artist-supplied hardpoints.
  *
- * Points sit at the back face (maxZ) of the bounding box so they face
- * toward the user's face.
- */
-/**
- * Derives hardpoints from the glasses bounding box.
+ * Confirmed axis layout from bbox logging (default-glasses.stl):
+ *   X = left-right  (wide axis, ±73 units)
+ *   Y = up-down     (±20 units)
+ *   Z = depth       (narrow axis, ±5 units — frame thickness)
  *
- * The default-glasses STL sits in local space with:
- *   Z = left-right (width of frame) — becomes world X after rotation=[0, PI/2, 0]
- *   Y = up-down
- *   X = depth (front-to-back of frame); bb.min.x is the face-side edge
- *
- * This assumption holds for any frame exported under the same convention.
- * Artist-supplied GLBs override this entirely with named hp_ nodes.
+ * Face-side = bb.max.z: the full scene transform is mesh rotation [0,PI/2,0]
+ * inside group rotation [0,PI/2,0] = combined [0,PI,0]. The resulting world_z
+ * formula is: world_z = -0.01*lz + 0.875. Higher lz → lower world_z → closer
+ * to face. So bb.max.z is the face-side edge.
  */
 export function deriveHardpointsFromBbox(geometry) {
   geometry.computeBoundingBox();
   const bb = geometry.boundingBox;
 
-  // Face-side depth: the back edge of the frame that sits closest to the skin
-  const faceX = bb.min.x;
+  const faceZ = bb.max.z;
 
-  const minZ = bb.min.z, maxZ = bb.max.z;
+  const minX = bb.min.x, maxX = bb.max.x;
   const minY = bb.min.y, maxY = bb.max.y;
-  const midZ = (minZ + maxZ) / 2;
-  const lensW = (maxZ - minZ) / 2;
+  const midX = (minX + maxX) / 2;
+  const lensW = (maxX - minX) / 2;
   const noseOffset = lensW * 0.12;
 
   return {
-    hp_left_outer_top:     new THREE.Vector3(faceX, maxY, minZ),
-    hp_left_outer_bottom:  new THREE.Vector3(faceX, minY, minZ),
-    hp_left_inner_top:     new THREE.Vector3(faceX, maxY, midZ - noseOffset * 2),
-    hp_left_inner_bottom:  new THREE.Vector3(faceX, minY, midZ - noseOffset * 2),
-    hp_right_inner_top:    new THREE.Vector3(faceX, maxY, midZ + noseOffset * 2),
-    hp_right_inner_bottom: new THREE.Vector3(faceX, minY, midZ + noseOffset * 2),
-    hp_right_outer_top:    new THREE.Vector3(faceX, maxY, maxZ),
-    hp_right_outer_bottom: new THREE.Vector3(faceX, minY, maxZ),
-    hp_nose_left:          new THREE.Vector3(faceX, minY, midZ - noseOffset),
-    hp_nose_right:         new THREE.Vector3(faceX, minY, midZ + noseOffset),
+    hp_left_outer_top:     new THREE.Vector3(minX,                  maxY, faceZ),
+    hp_left_outer_bottom:  new THREE.Vector3(minX,                  minY, faceZ),
+    hp_left_inner_top:     new THREE.Vector3(midX - noseOffset * 2, maxY, faceZ),
+    hp_left_inner_bottom:  new THREE.Vector3(midX - noseOffset * 2, minY, faceZ),
+    hp_right_inner_top:    new THREE.Vector3(midX + noseOffset * 2, maxY, faceZ),
+    hp_right_inner_bottom: new THREE.Vector3(midX + noseOffset * 2, minY, faceZ),
+    hp_right_outer_top:    new THREE.Vector3(maxX,                  maxY, faceZ),
+    hp_right_outer_bottom: new THREE.Vector3(maxX,                  minY, faceZ),
+    hp_nose_left:          new THREE.Vector3(midX - noseOffset,     minY, faceZ),
+    hp_nose_right:         new THREE.Vector3(midX + noseOffset,     minY, faceZ),
   };
 }
 
