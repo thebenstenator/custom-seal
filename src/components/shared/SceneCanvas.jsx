@@ -10,7 +10,7 @@ export default function SceneCanvas({ cameraPosition = [0, 0, 4.5], children }) 
         <directionalLight position={[10, 10, 5]} intensity={1} />
         <directionalLight position={[-10, -10, -5]} intensity={0.3} />
         {children}
-        <OrbitControls enableZoom={true} enablePan={false} />
+        <OrbitControls enableZoom={true} enablePan={true} />
       </Suspense>
     </Canvas>
   );

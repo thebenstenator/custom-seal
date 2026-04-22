@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useFrame } from "@react-three/fiber";
 import { Upload } from "lucide-react";
@@ -6,8 +6,9 @@ import * as THREE from "three";
 import { useAppStore } from "../../store/useAppStore";
 import SceneCanvas from "../shared/SceneCanvas";
 import { useSTLModel, useUploadedModel } from "../../hooks/useSTLModel";
-import { deriveHardpointsFromBbox, transformHardpoints } from "../../utils/geometry/hardpoints";
-import { buildFaceBVH, generateSeal } from "../../utils/geometry/sealGenerator";
+import { findBestSliceZ, extractPerEyePaths } from "../../utils/geometry/meshSlice";
+import { generateParametricSealPath } from "../../utils/geometry/parametricSeal";
+import { generateSeal, generateDualSeal } from "../../utils/geometry/sealGenerator";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ModelPreview.css";
@@ -78,7 +79,7 @@ function HardpointMarkers({ points }) {
 // useFrame is the correct R3F pattern for reading mesh state from inside the Canvas.
 function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
   const sealTrigger = useAppStore((s) => s.sealTrigger);
-  const lastTrigger = useRef(-1);
+  const lastTrigger = useRef(0);
 
   useFrame(() => {
     if (sealTrigger === lastTrigger.current) return;
@@ -91,26 +92,31 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
     glasses.updateMatrixWorld(true);
     head.updateMatrixWorld(true);
 
+    glasses.geometry.computeBoundingBox();
     const bb = glasses.geometry.boundingBox;
-    console.log("[CustomSeal] glasses bbox", {
-      x: [bb.min.x.toFixed(2), bb.max.x.toFixed(2)],
-      y: [bb.min.y.toFixed(2), bb.max.y.toFixed(2)],
-      z: [bb.min.z.toFixed(2), bb.max.z.toFixed(2)],
-    });
+    const faceNormal = new THREE.Vector3(0, 0, 1).transformDirection(glasses.matrixWorld);
 
-    const rawHardpoints = deriveHardpointsFromBbox(glasses.geometry);
-    const worldHardpoints = transformHardpoints(rawHardpoints, glasses.matrixWorld);
+    const toWorld = (localPts) =>
+      localPts?.map((p) => p.clone().applyMatrix4(glasses.matrixWorld)) ?? null;
 
-    console.log("[CustomSeal] world hardpoints",
-      Object.fromEntries(Object.entries(worldHardpoints).map(([k, v]) =>
-        [k, [v.x.toFixed(3), v.y.toFixed(3), v.z.toFixed(3)]]
-      ))
-    );
+    // Tier 2: per-eye silhouette from cross-section inner loops
+    const best = findBestSliceZ(glasses.geometry, 0.5);
+    const eyePaths = best ? extractPerEyePaths(best.loops) : null;
+    const leftWorld  = toWorld(eyePaths?.leftPath);
+    const rightWorld = toWorld(eyePaths?.rightPath);
+    let sealGeometry = eyePaths ? generateDualSeal(leftWorld, rightWorld, faceNormal) : null;
+    const worldHardpoints = [...(leftWorld ?? []), ...(rightWorld ?? [])];
+    console.log("[seal] Tier 2 — left:", leftWorld?.length ?? 0, "right:", rightWorld?.length ?? 0);
 
-    buildFaceBVH(head.geometry);
-    const sealGeometry = generateSeal(worldHardpoints, head);
-
-    console.log("[CustomSeal] seal geometry", sealGeometry ? "generated" : "null — fewer than 3 ray hits");
+    // Tier 3: parametric fallback
+    if (!sealGeometry) {
+      const localPath = generateParametricSealPath(
+        { lensWidth: 52, lensHeight: 34, bridgeWidth: 17 }, bb.max.z
+      );
+      const worldPath = localPath.map((p) => p.clone().applyMatrix4(glasses.matrixWorld));
+      sealGeometry = generateSeal(worldPath, faceNormal);
+      console.log("[seal] Tier 3 parametric fallback");
+    }
 
     onSealGenerated({ worldHardpoints, sealGeometry });
   });
@@ -237,9 +243,11 @@ export default function ModelPreview() {
                 scale={glassesScale}
                 meshRef={glassesMeshRef}
               />
-              <SealPreview geometry={generatedSeal} />
-              {showHardpoints && <HardpointMarkers points={hardpoints} />}
             </group>
+
+            {/* World-space geometry — must be outside the group to avoid double-transform */}
+            <SealPreview geometry={generatedSeal} />
+            {showHardpoints && <HardpointMarkers points={hardpoints} />}
 
             <SealGenerator
               glassesMeshRef={glassesMeshRef}

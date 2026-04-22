@@ -41,89 +41,74 @@ The core technical challenge is **generating the seal geometry** — a thin-wall
 
 ## 3. Core Technical Challenge: Seal Geometry Generation
 
-This is the crux of the product. Several approaches exist — they're not mutually exclusive.
+The seal path pipeline operates in three tiers, degrading gracefully. Each tier produces the same output — an ordered array of world-space Vector3 points tracing the glasses frame perimeter — so the downstream ray-cast + loft surface is identical regardless of which tier ran.
 
-### 3A. Hardpoint-Based Procedural Generation (Recommended Primary Approach)
-
-**Concept:** 3D artists embed semantic "hardpoints" into each glasses model — named 3D coordinates that mark structurally significant locations on the frame. The seal algorithm uses these points as anchors, then finds corresponding face-surface points via ray casting.
-
-**Hardpoint Schema (proposed):**
-```json
-{
-  "frame_id": "aviator-001",
-  "version": 1,
-  "hardpoints": {
-    "left_lens_inner_top":    [x, y, z],
-    "left_lens_inner_bottom": [x, y, z],
-    "left_lens_outer_top":    [x, y, z],
-    "left_lens_outer_bottom": [x, y, z],
-    "right_lens_inner_top":   [x, y, z],
-    "right_lens_inner_bottom":[x, y, z],
-    "right_lens_outer_top":   [x, y, z],
-    "right_lens_outer_bottom":[x, y, z],
-    "nose_bridge_left":       [x, y, z],
-    "nose_bridge_right":      [x, y, z],
-    "left_temple_start":      [x, y, z],
-    "right_temple_start":     [x, y, z]
-  },
-  "seal_loop": [
-    "left_lens_outer_top", "left_lens_outer_bottom",
-    "nose_bridge_left", "nose_bridge_right",
-    "right_lens_outer_bottom", "right_lens_outer_top"
-  ]
-}
+```
+Tier 1: Artist GLB with hp_ nodes     → most accurate, production path
+Tier 2: Z-plane cross-section         → automatic from any model
+Tier 3: Parametric from measurements  → fallback when model is rough/missing
 ```
 
-**The `seal_loop` array** defines the ordered ring of hardpoints that will form the inner edge of the seal. This gives artists explicit control over the seal boundary — they define the geometry, the algorithm does the face-fitting.
+---
 
-**Generation algorithm:**
-1. Apply the user's alignment transform to all hardpoints (same matrix as the glasses mesh)
-2. For each transformed hardpoint, cast a ray toward the face mesh surface
-3. The hit point becomes a face-surface anchor
-4. Build a closed spline through the face-surface anchors
-5. Extrude the spline outward (toward the glasses frame) by a configurable wall thickness (e.g., 2–4mm)
-6. Cap ends, stitch walls, export as manifold mesh
+### Tier 1 — Artist Hardpoints (Production Path)
 
-**Why this approach:**
-- Artists stay in their workflow (Blender, etc.) — hardpoints are just empties/vertices
-- The JSON file is tiny and human-readable
-- The algorithm doesn't need to understand the whole glasses mesh
-- Scale and shape variation between frames is handled naturally
-- TPU wall thickness is a single parameter artists don't need to know about
+3D artists place named empty objects (`hp_*` prefix) at the inner lens rim of each frame in Blender or Fusion 360, then export as GLB. The app extracts these nodes by name, orders them per `sealLoop`, applies the alignment matrix, and feeds the resulting world-space points into the generation pipeline.
 
-**For 3D Artists — Brief:**
-> When you model a glasses frame, you'll also place a set of named empty objects at specific locations on the frame. These become the "seal loop." The app will use these points to generate the seal automatically. We'll give you a Blender addon or template file that makes this straightforward. Points need to be on the interior edge of the frame where the seal would contact the user's face.
+See Section 8 for the full artist spec and Blender workflow.
 
-### 3B. CSG Boolean Approach (Supplementary / Advanced)
+**When it runs:** Frame GLB contains at least one `hp_*` node.
 
-Use Constructive Solid Geometry to subtract the positioned glasses volume from an offset of the face scan, yielding the exact gap geometry.
+---
 
-**Libraries:** `three-csg-ts`, `@jscad/modeling`
+### Tier 2 — Z-Plane Cross-Section (Algorithmic)
 
-**Pros:** Geometrically precise, no artist setup required  
-**Cons:** Computationally heavy in browser (face meshes are 50k–200k triangles), requires watertight meshes (not guaranteed from phone scans), hard to control seal thickness
+Slices the glasses geometry at `Z = bb.max.z` (face-contact plane). Every triangle straddling that plane contributes a line segment. Segments are chained into closed loops; the largest loop is the outer frame perimeter. Temple stubs (sections extending past the lens X range) are trimmed using the inner lens loops as a reference. The resulting ordered points trace the actual face-side shape of the frame.
 
-**Recommendation:** Prototype this in parallel as a fallback/validation tool. If the hardpoint approach produces valid geometry, validate it against the CSG result.
+**Algorithm:**
+1. For each triangle, compute the 2-point intersection with the plane `Z = faceZ`
+2. Chain segments into closed loops using nearest-neighbour matching (ε = 0.01mm)
+3. Sort loops by bounding area — largest = outer frame perimeter, smaller = lens holes
+4. Determine trim bounds from inner lens loops (innerMinX − 8mm, innerMaxX + 8mm)
+5. Extract the contiguous arc of the outer loop within trim bounds
+6. Downsample to ≤100 evenly-spaced points
 
-### 3C. Marching Cubes / SDF Approach (Research-Grade)
+**Why cross-section over boundary-edge detection:**
+Boundary edges find the inner lens *holes*, which would give a seal that follows only the lens opening — not the outer frame perimeter that actually contacts the face. The Z-plane cross-section captures the face-contact surface profile of the entire front of the frame, which is what the seal needs to follow.
 
-Voxelize the space between face scan and glasses, use signed distance fields to define the seal shell, extract with marching cubes.
+**When it runs:** No hp_ nodes present; falls back automatically.
 
-**Libraries:** `isosurface` npm, or custom WASM via Rust/C++
+---
 
-**Pros:** Handles arbitrary topology, robust to mesh quality  
-**Cons:** High memory usage, voxel resolution trade-off, slow in browser
+### Tier 3 — Parametric from Measurements (Fallback)
 
-**Recommendation:** Viable for a server-side processing pipeline. Not suitable for real-time browser preview.
+Generates the seal path from standard optometric measurements stamped on every glasses frame arm (`52□17-124` → lens width 52mm, bridge 17mm, temple 124mm). Lens height is the only measurement not stamped; it can be extracted from the Tier 2 cross-section as a byproduct, entered manually, or estimated from lens width (typical ratio: height ≈ width × 0.65).
 
-### 3D. Manual Spline Editing (User-Controlled)
+Produces a rounded-rectangle path for each lens with configurable corner radius, connected across the nose bridge into a single closed loop.
 
-Let the user draw the seal boundary directly on the face mesh using click-to-place control points in the 3D viewport.
+**Supported lens shapes:** `rectangular`, `round`, `aviator` (teardrop). Non-standard shapes require artist hardpoints.
 
-**Pros:** Maximum user control, works with any frame  
-**Cons:** Requires significant UX work, high skill ceiling for users
+**When it runs:** Cross-section fails (degenerate mesh, too few triangles, no loops found).
 
-**Recommendation:** Phase 3+ feature. Offer as override/refinement on top of the hardpoint result.
+---
+
+### Shared generation pipeline (all tiers)
+
+Once a world-space path array is produced by any tier:
+1. For each path point, cast a ray toward the face mesh center (BVH-accelerated)
+2. The ray hit = face-surface anchor; no-hit falls back to the path point itself
+3. Build a ruled surface (quad strip) between the glasses-edge path and the face-edge anchors
+4. This surface IS the seal wall — one edge attaches to the glasses, one contacts the face
+
+---
+
+### Future approaches (not yet built)
+
+**CSG Boolean** — subtract positioned glasses volume from face scan offset. Geometrically precise but computationally heavy; suitable for server-side processing, not real-time preview.
+
+**Marching Cubes / SDF** — voxelize the gap, extract with marching cubes. Research-grade; viable server-side. Not suitable for browser.
+
+**Manual spline override** — user drags control points directly on the face mesh. Phase 3+ refinement tool on top of the automated result.
 
 ---
 
