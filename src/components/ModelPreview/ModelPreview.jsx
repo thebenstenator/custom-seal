@@ -3,12 +3,24 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useFrame } from "@react-three/fiber";
 import { Upload } from "lucide-react";
 import * as THREE from "three";
-import { useAppStore } from "../../store/useAppStore";
+import {
+  useAppStore,
+  DEFAULT_GLASSES_POSITION,
+  DEFAULT_GLASSES_ROTATION,
+  DEFAULT_GLASSES_SCALE,
+  DEFAULT_HEAD_ROTATION,
+} from "../../store/useAppStore";
 import SceneCanvas from "../shared/SceneCanvas";
 import { useSTLModel, useUploadedModel } from "../../hooks/useSTLModel";
-import { findBestSliceZ, extractPerEyePaths } from "../../utils/geometry/meshSlice";
+import {
+  findBestSliceZ,
+  extractPerEyePaths,
+} from "../../utils/geometry/meshSlice";
 import { generateParametricSealPath } from "../../utils/geometry/parametricSeal";
-import { generateSeal, generateDualSeal } from "../../utils/geometry/sealGenerator";
+import {
+  generateSeal,
+  generateDualSeal,
+} from "../../utils/geometry/sealGenerator";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./ModelPreview.css";
@@ -94,7 +106,9 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
 
     glasses.geometry.computeBoundingBox();
     const bb = glasses.geometry.boundingBox;
-    const faceNormal = new THREE.Vector3(0, 0, 1).transformDirection(glasses.matrixWorld);
+    const faceNormal = new THREE.Vector3(0, 0, 1).transformDirection(
+      glasses.matrixWorld,
+    );
 
     const toWorld = (localPts) =>
       localPts?.map((p) => p.clone().applyMatrix4(glasses.matrixWorld)) ?? null;
@@ -102,18 +116,28 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
     // Tier 2: per-eye silhouette from cross-section inner loops
     const best = findBestSliceZ(glasses.geometry, 0.5);
     const eyePaths = best ? extractPerEyePaths(best.loops) : null;
-    const leftWorld  = toWorld(eyePaths?.leftPath);
+    const leftWorld = toWorld(eyePaths?.leftPath);
     const rightWorld = toWorld(eyePaths?.rightPath);
-    let sealGeometry = eyePaths ? generateDualSeal(leftWorld, rightWorld, faceNormal) : null;
+    let sealGeometry = eyePaths
+      ? generateDualSeal(leftWorld, rightWorld, faceNormal)
+      : null;
     const worldHardpoints = [...(leftWorld ?? []), ...(rightWorld ?? [])];
-    console.log("[seal] Tier 2 — left:", leftWorld?.length ?? 0, "right:", rightWorld?.length ?? 0);
+    console.log(
+      "[seal] Tier 2 — left:",
+      leftWorld?.length ?? 0,
+      "right:",
+      rightWorld?.length ?? 0,
+    );
 
     // Tier 3: parametric fallback
     if (!sealGeometry) {
       const localPath = generateParametricSealPath(
-        { lensWidth: 52, lensHeight: 34, bridgeWidth: 17 }, bb.max.z
+        { lensWidth: 52, lensHeight: 34, bridgeWidth: 17 },
+        bb.max.z,
       );
-      const worldPath = localPath.map((p) => p.clone().applyMatrix4(glasses.matrixWorld));
+      const worldPath = localPath.map((p) =>
+        p.clone().applyMatrix4(glasses.matrixWorld),
+      );
       sealGeometry = generateSeal(worldPath, faceNormal);
       console.log("[seal] Tier 3 parametric fallback");
     }
@@ -129,28 +153,30 @@ function SealGenerator({ glassesMeshRef, headMeshRef, onSealGenerated }) {
 export default function ModelPreview() {
   const navigate = useNavigate();
 
-  const selectedFrame   = useAppStore((s) => s.selectedFrame);
-  const userScan        = useAppStore((s) => s.userScan);
+  const selectedFrame = useAppStore((s) => s.selectedFrame);
+  const userScan = useAppStore((s) => s.userScan);
   const glassesPosition = useAppStore((s) => s.glassesPosition);
   const glassesRotation = useAppStore((s) => s.glassesRotation);
-  const glassesScale    = useAppStore((s) => s.glassesScale);
-  const headRotation    = useAppStore((s) => s.headRotation);
+  const glassesScale = useAppStore((s) => s.glassesScale);
+  const headRotation = useAppStore((s) => s.headRotation);
   const setGlassesPosition = useAppStore((s) => s.setGlassesPosition);
   const setGlassesRotation = useAppStore((s) => s.setGlassesRotation);
-  const setGlassesScale    = useAppStore((s) => s.setGlassesScale);
-  const setHeadRotation    = useAppStore((s) => s.setHeadRotation);
-  const resetAlignment     = useAppStore((s) => s.resetAlignment);
-  const setHardpoints          = useAppStore((s) => s.setHardpoints);
-  const setGeneratedSeal       = useAppStore((s) => s.setGeneratedSeal);
-  const generatedSeal          = useAppStore((s) => s.generatedSeal);
-  const hardpoints             = useAppStore((s) => s.hardpoints);
-  const triggerSealGeneration  = useAppStore((s) => s.triggerSealGeneration);
+  const setGlassesScale = useAppStore((s) => s.setGlassesScale);
+  const setHeadRotation = useAppStore((s) => s.setHeadRotation);
+  const resetAlignment = useAppStore((s) => s.resetAlignment);
+  const setHardpoints = useAppStore((s) => s.setHardpoints);
+  const setGeneratedSeal = useAppStore((s) => s.setGeneratedSeal);
+  const generatedSeal = useAppStore((s) => s.generatedSeal);
+  const hardpoints = useAppStore((s) => s.hardpoints);
+  const triggerSealGeneration = useAppStore((s) => s.triggerSealGeneration);
 
   const [uploadedScan, setUploadedScan] = useState(userScan?.file || null);
   const [showHardpoints, setShowHardpoints] = useState(false);
+  const [fineMode, setFineMode] = useState(false);
+  const [fineCenters, setFineCenters] = useState(null);
 
   const glassesMeshRef = useRef(null);
-  const headMeshRef    = useRef(null);
+  const headMeshRef = useRef(null);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
@@ -162,7 +188,9 @@ export default function ModelPreview() {
     if (validExtensions.includes(ext)) {
       setUploadedScan(file);
     } else {
-      alert("Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.");
+      alert(
+        "Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.",
+      );
     }
   };
 
@@ -183,6 +211,25 @@ export default function ModelPreview() {
     next[{ x: 0, y: 1, z: 2 }[axis]] = parseFloat(value);
     setHeadRotation(next);
   };
+
+  const axisIdx = { x: 0, y: 1, z: 2 };
+
+  const toggleFine = () => {
+    if (!fineMode) {
+      setFineCenters({
+        pos: [...glassesPosition],
+        rot: [...glassesRotation],
+        scale: glassesScale,
+        head: [...headRotation],
+      });
+    }
+    setFineMode((f) => !f);
+  };
+
+  const getRange = (coarseMin, coarseMax, fineCenter, fineHalf) =>
+    fineMode && fineCenters != null
+      ? { min: fineCenter - fineHalf, max: fineCenter + fineHalf }
+      : { min: coarseMin, max: coarseMax };
 
   const handleContinue = () => {
     navigate("/confirmation");
@@ -206,9 +253,15 @@ export default function ModelPreview() {
       <Notice variant="info">
         <p className="notice__text">
           {uploadedScan ? (
-            <><strong>Your scan is loaded!</strong> Position the glasses exactly where they sit on your face.</>
+            <>
+              <strong>Your scan is loaded!</strong> Position the glasses exactly
+              where they sit on your face.
+            </>
           ) : (
-            <><strong>Demo Mode:</strong> Generic head model. Upload your face scan below for a custom fit.</>
+            <>
+              <strong>Demo Mode:</strong> Generic head model. Upload your face
+              scan below for a custom fit.
+            </>
           )}
         </p>
       </Notice>
@@ -259,7 +312,7 @@ export default function ModelPreview() {
             />
           </SceneCanvas>
           <p className="model-preview__instructions">
-            Drag to rotate • Scroll to zoom
+            Left-drag to rotate • Scroll to zoom • Right-drag to pan
           </p>
         </div>
 
@@ -268,91 +321,162 @@ export default function ModelPreview() {
 
           <div className="control-group">
             <h4 className="control-group__label">Head Orientation</h4>
-            {[["Rotate Y", "y", headRotation[1]], ["Rotate Z", "z", headRotation[2]]].map(
-              ([label, axis, val]) => (
+            {[
+              ["Rotate Y", "y", headRotation[1], DEFAULT_HEAD_ROTATION[1]],
+              ["Rotate Z", "z", headRotation[2], DEFAULT_HEAD_ROTATION[2]],
+            ].map(([label, axis, val, def]) => {
+              const { min, max } = getRange(-Math.PI, Math.PI, fineCenters?.head[axisIdx[axis]] ?? val, 0.25);
+              const step = fineMode ? "0.001" : "0.005";
+              return (
                 <div className="control-row" key={axis}>
-                  <label className="control">
+                  <div className="control">
                     <span className="control__label">{label}</span>
                     <input
                       type="range"
-                      min={-Math.PI} max={Math.PI} step="0.01"
+                      min={min} max={max} step={step}
                       value={val}
                       onChange={(e) => handleHeadRotationChange(axis, e.target.value)}
                       className="control__slider"
                     />
-                    <span className="control__value">{val.toFixed(2)}</span>
-                  </label>
+                    <input
+                      type="number"
+                      value={parseFloat(val.toFixed(3))}
+                      step={step}
+                      onChange={(e) => handleHeadRotationChange(axis, e.target.value)}
+                      className="control__number"
+                    />
+                    <button
+                      className="control__reset-field"
+                      title="Reset to default"
+                      onClick={() => handleHeadRotationChange(axis, def)}
+                    >↺</button>
+                  </div>
                 </div>
-              )
-            )}
+              );
+            })}
           </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Position</h4>
             {[
-              ["Forward/Back", "x", glassesPosition[0]],
-              ["Up/Down",      "y", glassesPosition[1]],
-              ["Left/Right",   "z", glassesPosition[2]],
-            ].map(([label, axis, val]) => (
-              <div className="control-row" key={axis}>
-                <label className="control">
-                  <span className="control__label">{label}</span>
-                  <input
-                    type="range"
-                    min="-2" max="2" step="0.01"
-                    value={val}
-                    onChange={(e) => handlePositionChange(axis, e.target.value)}
-                    className="control__slider"
-                  />
-                  <span className="control__value">{val.toFixed(2)}</span>
-                </label>
-              </div>
-            ))}
+              ["Forward/Back", "x", glassesPosition[0], DEFAULT_GLASSES_POSITION[0]],
+              ["Up/Down",      "y", glassesPosition[1], DEFAULT_GLASSES_POSITION[1]],
+              ["Left/Right",   "z", glassesPosition[2], DEFAULT_GLASSES_POSITION[2]],
+            ].map(([label, axis, val, def]) => {
+              const { min, max } = getRange(-2, 2, fineCenters?.pos[axisIdx[axis]] ?? val, 0.25);
+              const step = fineMode ? "0.001" : "0.005";
+              return (
+                <div className="control-row" key={axis}>
+                  <div className="control">
+                    <span className="control__label">{label}</span>
+                    <input
+                      type="range"
+                      min={min} max={max} step={step}
+                      value={val}
+                      onChange={(e) => handlePositionChange(axis, e.target.value)}
+                      className="control__slider"
+                    />
+                    <input
+                      type="number"
+                      value={parseFloat(val.toFixed(3))}
+                      step={step}
+                      onChange={(e) => handlePositionChange(axis, e.target.value)}
+                      className="control__number"
+                    />
+                    <button
+                      className="control__reset-field"
+                      title="Reset to default"
+                      onClick={() => handlePositionChange(axis, def)}
+                    >↺</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Rotation</h4>
             {[
-              ["Tilt X", "x", glassesRotation[0]],
-              ["Tilt Y", "y", glassesRotation[1]],
-              ["Tilt Z", "z", glassesRotation[2]],
-            ].map(([label, axis, val]) => (
-              <div className="control-row" key={axis}>
-                <label className="control">
-                  <span className="control__label">{label}</span>
-                  <input
-                    type="range"
-                    min="0" max={Math.PI * 2} step="0.01"
-                    value={val}
-                    onChange={(e) => handleRotationChange(axis, e.target.value)}
-                    className="control__slider"
-                  />
-                  <span className="control__value">{val.toFixed(2)}</span>
-                </label>
-              </div>
-            ))}
+              ["Tilt X", "x", glassesRotation[0], DEFAULT_GLASSES_ROTATION[0]],
+              ["Tilt Y", "y", glassesRotation[1], DEFAULT_GLASSES_ROTATION[1]],
+              ["Tilt Z", "z", glassesRotation[2], DEFAULT_GLASSES_ROTATION[2]],
+            ].map(([label, axis, val, def]) => {
+              const { min, max } = getRange(0, Math.PI * 2, fineCenters?.rot[axisIdx[axis]] ?? val, 0.25);
+              const step = fineMode ? "0.001" : "0.005";
+              return (
+                <div className="control-row" key={axis}>
+                  <div className="control">
+                    <span className="control__label">{label}</span>
+                    <input
+                      type="range"
+                      min={min} max={max} step={step}
+                      value={val}
+                      onChange={(e) => handleRotationChange(axis, e.target.value)}
+                      className="control__slider"
+                    />
+                    <input
+                      type="number"
+                      value={parseFloat(val.toFixed(3))}
+                      step={step}
+                      onChange={(e) => handleRotationChange(axis, e.target.value)}
+                      className="control__number"
+                    />
+                    <button
+                      className="control__reset-field"
+                      title="Reset to default"
+                      onClick={() => handleRotationChange(axis, def)}
+                    >↺</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Scale</h4>
             <div className="control-row">
-              <label className="control">
+              <div className="control">
                 <span className="control__label">Size</span>
-                <input
-                  type="range"
-                  min="0.005" max="0.02" step="0.001"
-                  value={glassesScale}
-                  onChange={(e) => setGlassesScale(parseFloat(e.target.value))}
-                  className="control__slider"
-                />
-                <span className="control__value">{glassesScale.toFixed(3)}</span>
-              </label>
+                {(() => {
+                  const { min, max } = getRange(0.005, 0.02, fineCenters?.scale ?? glassesScale, 0.003);
+                  const step = fineMode ? "0.0001" : "0.0005";
+                  return (
+                    <>
+                      <input
+                        type="range"
+                        min={min} max={max} step={step}
+                        value={glassesScale}
+                        onChange={(e) => setGlassesScale(parseFloat(e.target.value))}
+                        className="control__slider"
+                      />
+                      <input
+                        type="number"
+                        value={parseFloat(glassesScale.toFixed(4))}
+                        step={step}
+                        onChange={(e) => setGlassesScale(parseFloat(e.target.value))}
+                        className="control__number"
+                      />
+                    </>
+                  );
+                })()}
+                <button
+                  className="control__reset-field"
+                  title="Reset to default"
+                  onClick={() => setGlassesScale(DEFAULT_GLASSES_SCALE)}
+                >↺</button>
+              </div>
             </div>
           </div>
 
           <div className="controls__actions">
             <button onClick={resetAlignment} className="controls__reset">
-              Reset
+              Reset All
+            </button>
+            <button
+              onClick={toggleFine}
+              className={`controls__toggle ${fineMode ? "controls__toggle--active" : ""}`}
+            >
+              {fineMode ? "Fine" : "Coarse"}
             </button>
             <button
               onClick={() => setShowHardpoints((v) => !v)}
