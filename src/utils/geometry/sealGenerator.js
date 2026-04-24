@@ -12,50 +12,91 @@ export function buildFaceBVH(geometry) {
   geometry.boundsTree = new MeshBVH(geometry);
 }
 
-/**
- * Offsets each point by a fixed depth along faceNormal.
- * Used as the face-side edge of the seal until real face scans are available,
- * at which point this should be replaced with raycasting against the scan mesh.
- */
 function extrudeAlongNormal(worldPath, faceNormal, depth) {
   return worldPath.map((p) => p.clone().addScaledVector(faceNormal, depth));
 }
 
 /**
- * Builds a ruled-surface quad strip between two ordered point arrays
- * (glassesEdge and faceEdge). The result is the seal wall — one edge
- * on the glasses frame, the other contacting the face.
+ * Computes the outward radial offset vector at each point of a loop.
+ * Direction = centroid → point, projected onto the seal plane (perpendicular
+ * to faceNormal), normalised and scaled to halfWall.
  */
-function buildRuledSurface(glassesEdge, faceEdge) {
+function radialOffsets(loop, faceNormal, halfWall) {
+  const centroid = new THREE.Vector3();
+  for (const p of loop) centroid.add(p);
+  centroid.divideScalar(loop.length);
+
+  return loop.map((p) => {
+    const r = p.clone().sub(centroid);
+    // Remove faceNormal component so offset stays in the seal plane
+    r.addScaledVector(faceNormal, -r.dot(faceNormal));
+    const len = r.length();
+    return len > 1e-6
+      ? r.multiplyScalar(halfWall / len)
+      : new THREE.Vector3(halfWall, 0, 0);
+  });
+}
+
+/**
+ * Builds a solid quad-tube band between glassesEdge and faceEdge.
+ * Each quad cross-section has four walls:
+ *   - outer wall  (faces away from loop centroid)
+ *   - inner wall  (faces toward loop centroid)
+ *   - glasses cap (faces away from face, closes the frame-side edge)
+ *   - face cap    (faces toward face, closes the face-side edge)
+ *
+ * Vertex layout (4n total):
+ *   0   .. n-1  : outer glasses edge
+ *   n   .. 2n-1 : inner glasses edge
+ *   2n  .. 3n-1 : outer face edge
+ *   3n  .. 4n-1 : inner face edge
+ */
+function buildThickBand(glassesEdge, faceEdge, faceNormal, wallThickness) {
   const n = Math.min(glassesEdge.length, faceEdge.length);
-  const positions = new Float32Array(n * 2 * 3);
-  const indices = [];
+  if (n < 3) return null;
 
+  const offsets = radialOffsets(glassesEdge, faceNormal, wallThickness / 2);
+
+  const og  = glassesEdge.map((p, i) => p.clone().add(offsets[i]));   // outer glasses
+  const ig  = glassesEdge.map((p, i) => p.clone().sub(offsets[i]));   // inner glasses
+  const of_ = faceEdge.map((p, i)    => p.clone().add(offsets[i]));   // outer face
+  const if_ = faceEdge.map((p, i)    => p.clone().sub(offsets[i]));   // inner face
+
+  const positions = new Float32Array(n * 4 * 3);
+  const set = (idx, v) => {
+    positions[idx * 3]     = v.x;
+    positions[idx * 3 + 1] = v.y;
+    positions[idx * 3 + 2] = v.z;
+  };
   for (let i = 0; i < n; i++) {
-    const g = glassesEdge[i];
-    const f = faceEdge[i];
-    positions[(i * 2 + 0) * 3 + 0] = g.x;
-    positions[(i * 2 + 0) * 3 + 1] = g.y;
-    positions[(i * 2 + 0) * 3 + 2] = g.z;
-    positions[(i * 2 + 1) * 3 + 0] = f.x;
-    positions[(i * 2 + 1) * 3 + 1] = f.y;
-    positions[(i * 2 + 1) * 3 + 2] = f.z;
+    set(i,       og[i]);
+    set(n + i,   ig[i]);
+    set(2*n + i, of_[i]);
+    set(3*n + i, if_[i]);
   }
 
-  for (let i = 0; i < n - 1; i++) {
-    const g0 = i * 2,     f0 = i * 2 + 1;
-    const g1 = (i+1)*2,   f1 = (i+1)*2 + 1;
-    indices.push(g0, f0, g1);
-    indices.push(f0, f1, g1);
-  }
-
-  // Only close the loop if the path endpoints are nearly coincident (closed loop,
-  // not a temple-trimmed open arc — open arcs closing creates a spike).
+  const indices = [];
   const isClosedLoop = glassesEdge[0].distanceTo(glassesEdge[n - 1]) < 0.1;
-  if (isClosedLoop) {
-    const g0 = (n-1)*2, f0 = (n-1)*2+1, g1 = 0, f1 = 1;
-    indices.push(g0, f0, g1);
-    indices.push(f0, f1, g1);
+  const segs = isClosedLoop ? n : n - 1;
+
+  for (let i = 0; i < segs; i++) {
+    const j = (i + 1) % n;
+
+    // Outer wall (normal points outward from centroid)
+    indices.push(i,      j,      2*n+i);
+    indices.push(j,      2*n+j,  2*n+i);
+
+    // Inner wall (normal points inward toward centroid)
+    indices.push(n+i,    3*n+i,  n+j);
+    indices.push(n+j,    3*n+i,  3*n+j);
+
+    // Glasses-side cap (normal points away from face)
+    indices.push(i,      n+i,    j);
+    indices.push(n+i,    n+j,    j);
+
+    // Face-side cap (normal points toward face)
+    indices.push(2*n+i,  2*n+j,  3*n+i);
+    indices.push(2*n+j,  3*n+j,  3*n+i);
   }
 
   const geo = new THREE.BufferGeometry();
@@ -65,20 +106,14 @@ function buildRuledSurface(glassesEdge, faceEdge) {
   return geo;
 }
 
-/**
- * Generates the seal wall geometry.
- *
- * @param {THREE.Vector3[]} worldSealPath - ordered world-space points on
- *   the glasses frame edge (output of any of the three pipeline tiers).
- * @param {THREE.Mesh} faceMesh - the head mesh (must have boundsTree built).
- * @returns {THREE.BufferGeometry | null}
- */
-const SEAL_DEPTH = 0.05; // ~5 mm at glasses scale 0.01
+// ~5mm depth toward face, ~0.9mm wall thickness (at glasses scale 0.01)
+const SEAL_DEPTH      = 0.05;
+const WALL_THICKNESS  = 0.009;
 
 export function generateSeal(worldSealPath, faceNormal) {
   if (!worldSealPath || worldSealPath.length < 3) return null;
   const faceEdge = extrudeAlongNormal(worldSealPath, faceNormal, SEAL_DEPTH);
-  return buildRuledSurface(worldSealPath, faceEdge);
+  return buildThickBand(worldSealPath, faceEdge, faceNormal, WALL_THICKNESS);
 }
 
 function mergeGeos(geos) {
@@ -94,7 +129,7 @@ function mergeGeos(geos) {
     positions.set(g.attributes.position.array, posOffset);
     for (const idx of g.index.array) indices.push(idx + vertOffset);
     vertOffset += g.attributes.position.count;
-    posOffset += g.attributes.position.array.length;
+    posOffset  += g.attributes.position.array.length;
   }
   const merged = new THREE.BufferGeometry();
   merged.setAttribute("position", new THREE.BufferAttribute(positions, 3));

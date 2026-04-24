@@ -46,7 +46,9 @@ export default function Confirmation() {
   const handleDownload = () => {
     if (!generatedSeal) return;
     const exporter = new STLExporter();
-    const mesh = new THREE.Mesh(generatedSeal);
+    const scaledGeo = generatedSeal.clone();
+    scaledGeo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+    const mesh = new THREE.Mesh(scaledGeo);
     const result = exporter.parse(mesh, { binary: true });
     const blob = new Blob([result], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
