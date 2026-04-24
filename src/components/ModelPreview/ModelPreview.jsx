@@ -44,8 +44,10 @@ function HeadModel({ scanFile, rotation, meshRef }) {
   );
 }
 
-function GlassesModel({ position, rotation, scale, meshRef }) {
-  const geometry = useSTLModel("/models/default-glasses.stl");
+function GlassesModel({ glassesFile, position, rotation, scale, meshRef }) {
+  const geometry = glassesFile
+    ? useUploadedModel(glassesFile)
+    : useSTLModel("/models/default-glasses.stl");
   return (
     <mesh
       ref={meshRef}
@@ -171,6 +173,7 @@ export default function ModelPreview() {
   const triggerSealGeneration = useAppStore((s) => s.triggerSealGeneration);
 
   const [uploadedScan, setUploadedScan] = useState(userScan?.file || null);
+  const [glassesFile, setGlassesFile] = useState(null);
   const [showHardpoints, setShowHardpoints] = useState(false);
   const [fineMode, setFineMode] = useState(false);
   const [fineCenters, setFineCenters] = useState(null);
@@ -192,6 +195,17 @@ export default function ModelPreview() {
         "Invalid file type. Please upload an OBJ, PLY, STL, GLB, or GLTF file.",
       );
     }
+  };
+
+  const handleGlassesUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".stl")) {
+      alert("Please upload an STL file.");
+      return;
+    }
+    setGlassesFile(file);
+    resetAlignment();
   };
 
   const handlePositionChange = (axis, value) => {
@@ -291,6 +305,7 @@ export default function ModelPreview() {
                 meshRef={headMeshRef}
               />
               <GlassesModel
+                glassesFile={glassesFile}
                 position={glassesPosition}
                 rotation={glassesRotation}
                 scale={glassesScale}
@@ -318,6 +333,30 @@ export default function ModelPreview() {
 
         <div className="model-preview__controls">
           <h3 className="controls__title">Adjust Alignment</h3>
+
+          <div className="control-group">
+            <h4 className="control-group__label">Glasses Model</h4>
+            {glassesFile ? (
+              <div className="glasses-upload__loaded">
+                <span className="glasses-upload__filename">{glassesFile.name}</span>
+                <button
+                  className="glasses-upload__remove"
+                  onClick={() => { setGlassesFile(null); resetAlignment(); }}
+                >✕</button>
+              </div>
+            ) : (
+              <label className="glasses-upload__button">
+                <Upload size={14} />
+                <span>Upload STL</span>
+                <input
+                  type="file"
+                  accept=".stl"
+                  onChange={handleGlassesUpload}
+                  className="scan-upload-input"
+                />
+              </label>
+            )}
+          </div>
 
           <div className="control-group">
             <h4 className="control-group__label">Head Orientation</h4>
