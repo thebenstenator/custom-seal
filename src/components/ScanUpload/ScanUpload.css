@@ -39,6 +39,7 @@
   border-radius: 0.25rem;
   font-size: 0.875rem;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .scan-upload__preview-note {

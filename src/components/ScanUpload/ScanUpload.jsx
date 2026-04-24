@@ -70,7 +70,7 @@ export default function ScanUpload() {
             </group>
           </SceneCanvas>
           <p className="scan-upload__viewer-instructions">
-            Drag to rotate • Scroll to zoom
+            Left-drag to rotate • Scroll to zoom • Right-drag to pan
           </p>
         </div>
         <p className="scan-upload__preview-note">
