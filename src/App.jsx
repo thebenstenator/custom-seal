@@ -7,6 +7,7 @@ import FrameSelection from "./components/FrameSelection/FrameSelection";
 import ModelPreview from "./components/ModelPreview/ModelPreview";
 import ScanUpload from "./components/ScanUpload/ScanUpload";
 import Confirmation from "./components/Confirmation/Confirmation";
+import MeasureInput from "./components/MeasureInput/MeasureInput";
 import { frames } from "./data/frames";
 import "./App.css";
 
@@ -25,6 +26,7 @@ export default function App() {
                 element={<FrameSelection frames={frames} />}
               />
               <Route path="/scan" element={<ScanUpload />} />
+              <Route path="/measure" element={<MeasureInput />} />
               <Route path="/preview" element={<ModelPreview />} />
               <Route path="/confirmation" element={<Confirmation />} />
             </Routes>

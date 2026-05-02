@@ -156,6 +156,18 @@ export default function ScanUpload() {
           <Button variant="primary" fullWidth onClick={() => navigate("/preview")}>
             Continue to Alignment (Demo)
           </Button>
+
+          <div className="scan-upload__measure-alt">
+            <span className="scan-upload__measure-alt-label">
+              Don't have a scan?
+            </span>
+            <button
+              className="scan-upload__measure-link"
+              onClick={() => navigate("/measure")}
+            >
+              Use measurements instead →
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -35,11 +35,12 @@ function GlassesPreview({ position, rotation, scale }) {
 
 export default function Confirmation() {
   const navigate = useNavigate();
-  const selectedFrame   = useAppStore((s) => s.selectedFrame);
-  const generatedSeal   = useAppStore((s) => s.generatedSeal);
-  const glassesPosition = useAppStore((s) => s.glassesPosition);
-  const glassesRotation = useAppStore((s) => s.glassesRotation);
-  const glassesScale    = useAppStore((s) => s.glassesScale);
+  const selectedFrame     = useAppStore((s) => s.selectedFrame);
+  const generatedSeal     = useAppStore((s) => s.generatedSeal);
+  const glassesPosition   = useAppStore((s) => s.glassesPosition);
+  const glassesRotation   = useAppStore((s) => s.glassesRotation);
+  const glassesScale      = useAppStore((s) => s.glassesScale);
+  const measurementMode   = useAppStore((s) => s.measurementMode);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
@@ -62,7 +63,7 @@ export default function Confirmation() {
   return (
     <div className="confirmation">
       <div className="page-header">
-        <Button variant="back" onClick={() => navigate("/preview")}>
+        <Button variant="back" onClick={() => navigate(measurementMode ? "/measure" : "/preview")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Your Seal is Ready</h2>
@@ -75,14 +76,16 @@ export default function Confirmation() {
       {generatedSeal ? (
         <>
           <div className="confirmation__viewer">
-            <SceneCanvas cameraPosition={[0, 0, 7.5]}>
-              <group rotation={[0, Math.PI / 2, 0]}>
-                <GlassesPreview
-                  position={glassesPosition}
-                  rotation={glassesRotation}
-                  scale={glassesScale}
-                />
-              </group>
+            <SceneCanvas cameraPosition={measurementMode ? [0, 0, 2] : [0, 0, 7.5]}>
+              {!measurementMode && (
+                <group rotation={[0, Math.PI / 2, 0]}>
+                  <GlassesPreview
+                    position={glassesPosition}
+                    rotation={glassesRotation}
+                    scale={glassesScale}
+                  />
+                </group>
+              )}
               <SealMesh geometry={generatedSeal} />
             </SceneCanvas>
             <p className="confirmation__viewer-hint">
@@ -127,8 +130,8 @@ export default function Confirmation() {
       </Notice>
 
       <div className="confirmation__footer">
-        <Button variant="secondary" onClick={() => navigate("/preview")}>
-          Adjust Alignment
+        <Button variant="secondary" onClick={() => navigate(measurementMode ? "/measure" : "/preview")}>
+          {measurementMode ? "Adjust Measurements" : "Adjust Alignment"}
         </Button>
         <Button variant="primary" onClick={() => navigate("/")}>
           Start Another Design

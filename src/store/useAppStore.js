@@ -23,6 +23,10 @@ export const useAppStore = create(
       hardpoints: null,
       generatedSeal: null,
 
+      // Measurement-based flow
+      measurements: null,
+      measurementMode: false,
+
       // Actions
       setSelectedFrame: (frame) => set({ selectedFrame: frame }),
       setUserScan: (scan) => set({ userScan: scan }),
@@ -34,6 +38,9 @@ export const useAppStore = create(
 
       setHardpoints: (hardpoints) => set({ hardpoints }),
       setGeneratedSeal: (geometry) => set({ generatedSeal: geometry }),
+
+      setMeasurements: (m) => set({ measurements: m }),
+      setMeasurementMode: (v) => set({ measurementMode: v }),
 
       sealTrigger: 0,
       triggerSealGeneration: () => set((s) => ({ sealTrigger: s.sealTrigger + 1 })),
@@ -54,6 +61,8 @@ export const useAppStore = create(
         glassesRotation: state.glassesRotation,
         glassesScale: state.glassesScale,
         headRotation: state.headRotation,
+        measurements: state.measurements,
+        measurementMode: state.measurementMode,
       }),
     }
   )

@@ -72,20 +72,104 @@ function centroidX(loop) {
  * Both paths are in the same local space as the input loops.
  */
 export function extractPerEyePaths(loops, numAngles = 120) {
-  if (!loops || loops.length < 2) return null;
+  if (!loops || loops.length === 0) return null;
   const sorted = [...loops].sort((a, b) => bboxArea(b) - bboxArea(a));
   const maxArea = bboxArea(sorted[0]);
-  // Keep only inner loops: smaller than half the outer frame, but not tiny noise
+
+  console.log(
+    "[Tier2 loops]",
+    sorted.map((l, i) =>
+      `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
+    ).join(" | ")
+  );
+
+  // Standard case: combined outer frame with identifiable inner lens holes
+  // (inner = area < 50% of largest loop, substantial enough not to be noise)
   const inner = sorted.filter((l) => bboxArea(l) < maxArea * 0.5 && bboxArea(l) > 100);
-  if (inner.length === 0) return null;
 
-  const leftLoops  = inner.filter((l) => centroidX(l) < 0);
-  const rightLoops = inner.filter((l) => centroidX(l) >= 0);
+  if (inner.length > 0) {
+    const leftLoops  = inner.filter((l) => centroidX(l) < 0);
+    const rightLoops = inner.filter((l) => centroidX(l) >= 0);
+    console.log("[Tier2 split] inner found:", inner.length, "→ left:", leftLoops.length, "right:", rightLoops.length);
+    return {
+      leftPath:  leftLoops.length  > 0 ? extractSilhouettePath(leftLoops,  numAngles) : null,
+      rightPath: rightLoops.length > 0 ? extractSilhouettePath(rightLoops, numAngles) : null,
+    };
+  }
 
-  return {
-    leftPath:  leftLoops.length  > 0 ? extractSilhouettePath(leftLoops,  numAngles) : null,
-    rightPath: rightLoops.length > 0 ? extractSilhouettePath(rightLoops, numAngles) : null,
+  // Fallback: no combined outer frame. Filter noise first, then split per-eye.
+  // Noise loops have area≈0 or very few points (mesh intersection artifacts).
+  const valid = sorted.filter((l) => l.length >= 5 && bboxArea(l) > 10);
+  let leftLoops  = valid.filter((l) => centroidX(l) < 0);
+  let rightLoops = valid.filter((l) => centroidX(l) >= 0);
+
+  if (leftLoops.length === 0 || rightLoops.length === 0) {
+    // All loops on one side — split individual points by X
+    const allPts   = valid.flat();
+    const leftPts  = allPts.filter((p) => p.x < 0);
+    const rightPts = allPts.filter((p) => p.x >= 0);
+    console.log("[Tier2 split] inner: 0 → point-split left:", leftPts.length, "right:", rightPts.length);
+    return {
+      leftPath:  leftPts.length  > 5 ? extractSilhouettePath([leftPts],  numAngles) : null,
+      rightPath: rightPts.length > 5 ? extractSilhouettePath([rightPts], numAngles) : null,
+    };
+  }
+
+  // Distinct loops per eye — use the largest loop for each eye directly.
+  // Using loops directly gives far better resolution than silhouette extraction,
+  // which collapses to very few points when source density is low.
+  const pickBest = (ls) => {
+    const best = [...ls].sort((a, b) => bboxArea(b) - bboxArea(a))[0];
+    return downsample(best, 100);
   };
+
+  console.log("[Tier2 split] inner: 0 → direct loops: left:", leftLoops.length, "right:", rightLoops.length);
+  return {
+    leftPath:  leftLoops.length  > 0 ? pickBest(leftLoops)  : null,
+    rightPath: rightLoops.length > 0 ? pickBest(rightLoops) : null,
+  };
+}
+
+/**
+ * Builds the INNER silhouette from a point cloud — for each angle, picks the
+ * NEAREST point (above a small threshold) from the centroid rather than the
+ * farthest. For a ring of frame material whose centroid sits inside the lens
+ * aperture, this gives the inner aperture boundary rather than the outer frame.
+ */
+export function extractInnerSilhouettePath(pointClouds, numAngles = 180, minFraction = 0.05) {
+  const all = pointClouds.flat();
+  if (all.length < 3) return null;
+
+  const cx = all.reduce((s, p) => s + p.x, 0) / all.length;
+  const cy = all.reduce((s, p) => s + p.y, 0) / all.length;
+  const z = all[0].z;
+
+  // Average radius sets the minimum threshold (excludes points at the centroid)
+  let sumR = 0;
+  for (const p of all) {
+    const dx = p.x - cx, dy = p.y - cy;
+    sumR += Math.sqrt(dx * dx + dy * dy);
+  }
+  const minThreshold = (sumR / all.length) * minFraction;
+
+  const result = [];
+  for (let i = 0; i < numAngles; i++) {
+    const angle = (i / numAngles) * Math.PI * 2;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    let minProj = Infinity, best = null;
+    for (const p of all) {
+      const proj = (p.x - cx) * cos + (p.y - cy) * sin;
+      if (proj >= minThreshold && proj < minProj) { minProj = proj; best = p; }
+    }
+    if (best) result.push(new THREE.Vector3(best.x, best.y, z));
+  }
+
+  if (result.length === 0) return null;
+  const deduped = [result[0]];
+  for (let i = 1; i < result.length; i++) {
+    if (!result[i].equals(deduped[deduped.length - 1])) deduped.push(result[i]);
+  }
+  return deduped.length >= 3 ? deduped : null;
 }
 
 /**
@@ -206,8 +290,338 @@ function connectSegments(segments, epsilon) {
 }
 
 // ---------------------------------------------------------------------------
+// Open boundary edge detection (works on surface/shell meshes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds all open boundary loops in a geometry — edges shared by exactly one
+ * triangle. On a glasses-frame surface mesh these are the outer perimeter
+ * and the inner lens-aperture perimeters. Returns ordered loops of Vector3.
+ */
+export function findOpenBoundaryLoops(geometry, epsilon = 0.5) {
+  const pos = geometry.attributes.position;
+  const n = pos.count;
+
+  // Deduplicate vertices (STL is non-indexed — each triangle stores 3 explicit verts)
+  const vertMap = new Map();
+  const dedupVerts = [];
+  const vidx = new Int32Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+    if (!vertMap.has(key)) {
+      vertMap.set(key, dedupVerts.length);
+      dedupVerts.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+    }
+    vidx[i] = vertMap.get(key);
+  }
+
+  // Count how many triangles each edge belongs to
+  const edgeUse = new Map();
+  const edgeEnds = new Map();
+
+  for (let i = 0; i < n; i += 3) {
+    const a = vidx[i], b = vidx[i + 1], c = vidx[i + 2];
+    for (const [v0, v1] of [[a, b], [b, c], [c, a]]) {
+      const lo = Math.min(v0, v1), hi = Math.max(v0, v1);
+      const key = `${lo},${hi}`;
+      edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1);
+      if (!edgeEnds.has(key)) edgeEnds.set(key, [v0, v1]);
+    }
+  }
+
+  // Collect boundary edge segments (used by exactly 1 triangle)
+  const segs = [];
+  for (const [key, count] of edgeUse) {
+    if (count === 1) {
+      const [v0, v1] = edgeEnds.get(key);
+      segs.push([dedupVerts[v0].clone(), dedupVerts[v1].clone()]);
+    }
+  }
+
+  if (segs.length === 0) return [];
+  console.log("[boundary] boundary edge segments:", segs.length);
+  return connectSegments(segs, epsilon);
+}
+
+// ---------------------------------------------------------------------------
+// Face-contact surface boundary detection (curved solid frames)
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds boundary loops of the face-contact surface on a solid glasses frame.
+ * Classifies each triangle as face-contact when its normal opposes cnAligned
+ * (i.e. it points toward the head). Boundary edges of those triangles — shared
+ * by exactly one face-contact triangle — form the outer frame perimeter and
+ * the inner lens-aperture perimeters. Works regardless of frame curvature.
+ */
+export function extractFaceContactLoops(geometry, cnAligned, threshold = 0.25, epsilon = 0.5) {
+  const pos = geometry.attributes.position;
+  const n = pos.count;
+  const cn = cnAligned.clone().normalize();
+
+  // Deduplicate vertices (STL/non-indexed geometry stores every vertex explicitly)
+  const vertMap = new Map();
+  const dedupVerts = [];
+  const vidx = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+    if (!vertMap.has(key)) {
+      vertMap.set(key, dedupVerts.length);
+      dedupVerts.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+    }
+    vidx[i] = vertMap.get(key);
+  }
+
+  // For each face-contact triangle, count how many face-contact triangles share each edge
+  const edgeUse = new Map();
+  const edgeEnds = new Map();
+  let fcCount = 0;
+
+  for (let t = 0; t < n; t += 3) {
+    const ai = vidx[t], bi = vidx[t + 1], ci = vidx[t + 2];
+    const a = dedupVerts[ai], b = dedupVerts[bi], c = dedupVerts[ci];
+
+    // Triangle normal via cross product
+    const e1x = b.x - a.x, e1y = b.y - a.y, e1z = b.z - a.z;
+    const e2x = c.x - a.x, e2y = c.y - a.y, e2z = c.z - a.z;
+    let nx = e1y * e2z - e1z * e2y;
+    let ny = e1z * e2x - e1x * e2z;
+    let nz = e1x * e2y - e1y * e2x;
+    const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (nLen < 1e-10) continue;
+    nx /= nLen; ny /= nLen; nz /= nLen;
+
+    // Face-contact: normal agrees with cnAligned (both point toward head).
+    // cnAligned points toward the head, so face-contact surface normals
+    // have a POSITIVE dot product with it (same direction, not opposite).
+    if (nx * cn.x + ny * cn.y + nz * cn.z <= threshold) continue;
+    fcCount++;
+
+    for (const [v0i, v1i] of [[ai, bi], [bi, ci], [ci, ai]]) {
+      const lo = Math.min(v0i, v1i), hi = Math.max(v0i, v1i);
+      const key = `${lo},${hi}`;
+      edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1);
+      if (!edgeEnds.has(key)) edgeEnds.set(key, [v0i, v1i]);
+    }
+  }
+
+  // Boundary edges: shared by exactly one face-contact triangle
+  const segs = [];
+  for (const [key, count] of edgeUse) {
+    if (count === 1) {
+      const [v0i, v1i] = edgeEnds.get(key);
+      segs.push([dedupVerts[v0i].clone(), dedupVerts[v1i].clone()]);
+    }
+  }
+
+  console.log("[faceContact] face-contact tris:", fcCount, "/ boundary segs:", segs.length);
+  if (segs.length === 0) return [];
+  return connectSegments(segs, epsilon);
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate cross-section approach (handles curved/wrapped frames)
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans every Z depth, collects per-eye boundary points from each slice,
+ * projects them all to Z = max.z, then extracts the silhouette for each eye.
+ * A single Z cross-section only captures the portion of the rim at that depth;
+ * aggregating all depths gives the complete outline regardless of curvature.
+ *
+ * cnAligned: the corrected face-away-from-head normal in aligned local space.
+ * When provided, Strategy 0 (face-contact surface boundary) is tried first —
+ * it directly traces the frame's face-contact edge regardless of curvature.
+ * geometry must be aligned so face axis = Z (widest horizontal = X).
+ */
+export function extractPerEyeAggregate(geometry, numAngles = 120, epsilon = 0.5, cnAligned = null) {
+  // ── Strategy 0: face-contact surface boundary ────────────────────────────
+  // Find triangles whose normals face the head and trace their boundary edges.
+  // This works for any curvature — no Z-slicing assumptions needed.
+  if (cnAligned) {
+    const fcLoops = extractFaceContactLoops(geometry, cnAligned, 0.25, epsilon);
+    if (fcLoops.length >= 2) {
+      const sorted = [...fcLoops].sort((a, b) => bboxArea(b) - bboxArea(a));
+      console.log(
+        "[aggregate S0] face-contact loops:",
+        sorted.map((l, i) =>
+          `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
+        ).join(" | ")
+      );
+
+      // Outer perimeter is the largest loop. Inner lens apertures are smaller.
+      const maxArea = bboxArea(sorted[0]);
+      const candidates = sorted.filter(l => l.length >= 4 && bboxArea(l) > 20);
+      const inner = candidates.filter(l => bboxArea(l) < maxArea * 0.85);
+      // Fall back to all candidates if we can't clearly identify inner loops
+      const pool = inner.length >= 2 ? inner : candidates;
+
+      const leftLoops  = pool.filter(l => centroidX(l) < -2);
+      const rightLoops = pool.filter(l => centroidX(l) >  2);
+
+      if (leftLoops.length > 0 && rightLoops.length > 0) {
+        // 1 mm outward offset so the seal sits on the frame material,
+        // not at the sharp inner edge of the lens aperture.
+        const SEAL_OUTSET_MM = 1.0;
+        const pickBest = (ls) => {
+          const raw = [...ls].sort((a, b) => bboxArea(b) - bboxArea(a))[0];
+          return downsample(expandLoopOutward(raw, SEAL_OUTSET_MM), 120);
+        };
+        console.log("[aggregate S0] left pts:", leftLoops[0].length, "right pts:", rightLoops[0].length);
+        return {
+          leftPath:  pickBest(leftLoops),
+          rightPath: pickBest(rightLoops),
+          skipZRemap: true, // points already sit on the face-contact surface
+        };
+      }
+    }
+  }
+
+  // ── Strategy 1: open boundary edge detection ────────────────────────────
+  // Lens apertures are always open boundaries on a surface/shell mesh.
+  // This is more accurate than Z-slicing for wrapped/curved frames.
+  const boundaryLoops = findOpenBoundaryLoops(geometry, epsilon);
+  if (boundaryLoops.length > 0) {
+    const sorted = [...boundaryLoops].sort((a, b) => bboxArea(b) - bboxArea(a));
+    console.log(
+      "[aggregate] boundary loops:",
+      sorted.map((l, i) =>
+        `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
+      ).join(" | ")
+    );
+
+    // The outer-frame perimeter (if present) spans the full width and has
+    // centroidX ≈ 0. Lens apertures sit clearly off-center on each side.
+    // Pick the loop with the most extreme centroidX for each eye.
+    const candidates = sorted.filter(l => bboxArea(l) > 50);
+    const leftLoops  = candidates.filter(l => centroidX(l) < -1);
+    const rightLoops = candidates.filter(l => centroidX(l) >  1);
+
+    if (leftLoops.length > 0 && rightLoops.length > 0) {
+      geometry.computeBoundingBox();
+      const sealZ = geometry.boundingBox.max.z; // Z remapped by caller anyway
+      // Among loops on each side, pick the one most extreme (farthest from center)
+      const pickEye = (ls, sign) =>
+        [...ls].sort((a, b) => sign * (centroidX(b) - centroidX(a)))[0];
+      const leftBest  = pickEye(leftLoops,  -1);
+      const rightBest = pickEye(rightLoops,  1);
+      console.log("[aggregate] boundary path: left pts:", leftBest.length,
+        "right pts:", rightBest.length);
+      return {
+        leftPath:  downsample(leftBest.map(p  => new THREE.Vector3(p.x,  p.y,  sealZ)), 120),
+        rightPath: downsample(rightBest.map(p => new THREE.Vector3(p.x,  p.y,  sealZ)), 120),
+      };
+    }
+  }
+
+  // ── Strategy 2: Z-slice outer rims → lens centers → normal filter ───────
+  // Inner hole-wall triangles have normals pointing TOWARD the lens center;
+  // outer frame and face-surface triangles point outward or in Z.
+  // Filter by that dot product, then take the outer silhouette of the
+  // surviving (inner-wall) vertices → inner aperture boundary.
+
+  // 2a — Outer rim Z-slices to find per-eye lens centers
+  geometry.computeBoundingBox();
+  const { max } = geometry.boundingBox;
+  const depth = max.z - geometry.boundingBox.min.z;
+  const step = Math.max(0.5, depth * 0.04);
+  const sealZ = max.z;
+
+  const leftRim = [], rightRim = [];
+  for (let d = 0; d <= depth * 0.95; d += step) {
+    const z = max.z - d;
+    const loops = sliceGeometryAtZ(geometry, z, epsilon);
+    if (loops.length === 0) continue;
+    const sorted = [...loops].sort((a, b) => bboxArea(b) - bboxArea(a));
+    const valid = sorted.filter(l => l.length >= 5 && bboxArea(l) > 10);
+    for (const loop of valid.slice(0, 4)) {
+      for (const p of loop) { (p.x < 0 ? leftRim : rightRim).push(p); }
+    }
+  }
+
+  if (leftRim.length < 3 || rightRim.length < 3) return { leftPath: null, rightPath: null };
+
+  const mean2d = (pts) => ({
+    x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+    y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+  });
+  const lc = mean2d(leftRim);
+  const rc = mean2d(rightRim);
+  console.log("[aggregate] lens centers L(", lc.x.toFixed(1), lc.y.toFixed(1),
+    ") R(", rc.x.toFixed(1), rc.y.toFixed(1), ")");
+
+  // 2b — Normal-direction filter: keep vertices whose normals point toward
+  //      their eye's lens center (inner hole-wall vertices)
+  // 2b — Normal-direction filter: keep vertices whose normals point toward
+  //      their eye's lens center (inner hole-wall vertices).
+  //      For curved frames the inner-wall normal can be heavily tilted in Z,
+  //      so we normalize only the XY component before the dot product — this
+  //      asks "does the XY part of this normal point toward the lens center?"
+  //      regardless of how much the face tilts.
+  geometry.computeVertexNormals();
+  const pos = geometry.attributes.position;
+  const nrm = geometry.attributes.normal;
+  const leftWall = [], rightWall = [];
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    const nx = nrm.getX(i), ny = nrm.getY(i);
+    // Skip vertices whose normals are almost purely in Z — those are face /
+    // back surfaces, not hole walls, and have no useful XY inward component.
+    const nXYlen = Math.sqrt(nx * nx + ny * ny);
+    if (nXYlen < 0.15) continue;
+    const isLeft = x < 0;
+    const { x: lcx, y: lcy } = isLeft ? lc : rc;
+    const dx = lcx - x, dy = lcy - y;
+    const dirLen = Math.sqrt(dx * dx + dy * dy);
+    if (dirLen < 0.5) continue;
+    // Normalized XY dot product — independent of Z-tilt of the wall
+    const dot = (nx * dx + ny * dy) / (nXYlen * dirLen);
+    if (dot > 0.3) {
+      (isLeft ? leftWall : rightWall).push(new THREE.Vector3(x, y, sealZ));
+    }
+  }
+
+  console.log("[aggregate] inner-wall verts: left:", leftWall.length, "right:", rightWall.length);
+
+  if (leftWall.length > 10 && rightWall.length > 10) {
+    return {
+      leftPath:  extractSilhouettePath([leftWall],  numAngles),
+      rightPath: extractSilhouettePath([rightWall], numAngles),
+    };
+  }
+
+  // 2c — Normal filter found too few verts (e.g. very smooth mesh with no
+  //      distinct hole-wall faces). Fall back: outer silhouette of all
+  //      per-eye vertices, re-centered on the known lens center so the
+  //      silhouette stays meaningful even when the centroid drifts.
+  console.log("[aggregate] falling back to outer silhouette from rim loops");
+  return {
+    leftPath:  extractSilhouettePath([leftRim],  numAngles),
+    rightPath: extractSilhouettePath([rightRim], numAngles),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Seal path extraction from loops
 // ---------------------------------------------------------------------------
+
+/**
+ * Expands every point in a loop radially outward from its XY centroid by
+ * `amount` units, keeping Z unchanged. Used to offset a lens-aperture boundary
+ * loop outward onto the frame material so the seal overlaps the frame.
+ */
+function expandLoopOutward(loop, amount) {
+  const cx = loop.reduce((s, p) => s + p.x, 0) / loop.length;
+  const cy = loop.reduce((s, p) => s + p.y, 0) / loop.length;
+  return loop.map((p) => {
+    const dx = p.x - cx, dy = p.y - cy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.001) return p.clone();
+    return new THREE.Vector3(p.x + (dx / len) * amount, p.y + (dy / len) * amount, p.z);
+  });
+}
 
 function bboxArea(loop) {
   const xs = loop.map((p) => p.x);
