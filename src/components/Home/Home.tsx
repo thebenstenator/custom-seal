@@ -1,5 +1,4 @@
-import React from "react";
-import {useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Eye, Upload, Users } from "lucide-react";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";

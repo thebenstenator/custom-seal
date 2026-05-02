@@ -1,12 +1,10 @@
-import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Droplets, User } from "lucide-react";
 import "./Header.css";
 
 export default function Header() {
   const navigate = useNavigate();
-  // TODO: This will come from auth context later
-  const isLoggedIn = false; // Hardcoded for now
+  const isLoggedIn = false;
 
   return (
     <header className="header">

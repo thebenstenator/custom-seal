@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter";
@@ -10,7 +9,11 @@ import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./Confirmation.css";
 
-function SealMesh({ geometry }) {
+interface SealMeshProps {
+  geometry: THREE.BufferGeometry | null;
+}
+
+function SealMesh({ geometry }: SealMeshProps) {
   if (!geometry) return null;
   return (
     <mesh geometry={geometry}>
@@ -24,7 +27,13 @@ function SealMesh({ geometry }) {
   );
 }
 
-function GlassesPreview({ position, rotation, scale }) {
+interface GlassesPreviewProps {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: number;
+}
+
+function GlassesPreview({ position, rotation, scale }: GlassesPreviewProps) {
   const geometry = useSTLModel("/models/default-glasses.stl");
   return (
     <mesh geometry={geometry} position={position} rotation={rotation} scale={scale}>
@@ -35,12 +44,12 @@ function GlassesPreview({ position, rotation, scale }) {
 
 export default function Confirmation() {
   const navigate = useNavigate();
-  const selectedFrame     = useAppStore((s) => s.selectedFrame);
-  const generatedSeal     = useAppStore((s) => s.generatedSeal);
-  const glassesPosition   = useAppStore((s) => s.glassesPosition);
-  const glassesRotation   = useAppStore((s) => s.glassesRotation);
-  const glassesScale      = useAppStore((s) => s.glassesScale);
-  const measurementMode   = useAppStore((s) => s.measurementMode);
+  const selectedFrame   = useAppStore((s) => s.selectedFrame);
+  const generatedSeal   = useAppStore((s) => s.generatedSeal);
+  const glassesPosition = useAppStore((s) => s.glassesPosition);
+  const glassesRotation = useAppStore((s) => s.glassesRotation);
+  const glassesScale    = useAppStore((s) => s.glassesScale);
+  const measurementMode = useAppStore((s) => s.measurementMode);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
@@ -63,7 +72,10 @@ export default function Confirmation() {
   return (
     <div className="confirmation">
       <div className="page-header">
-        <Button variant="back" onClick={() => navigate(measurementMode ? "/measure" : "/preview")}>
+        <Button
+          variant="back"
+          onClick={() => navigate(measurementMode ? "/measure" : "/preview")}
+        >
           ← Back
         </Button>
         <h2 className="page-header__title">Your Seal is Ready</h2>
@@ -130,7 +142,10 @@ export default function Confirmation() {
       </Notice>
 
       <div className="confirmation__footer">
-        <Button variant="secondary" onClick={() => navigate(measurementMode ? "/measure" : "/preview")}>
+        <Button
+          variant="secondary"
+          onClick={() => navigate(measurementMode ? "/measure" : "/preview")}
+        >
           {measurementMode ? "Adjust Measurements" : "Adjust Alignment"}
         </Button>
         <Button variant="primary" onClick={() => navigate("/")}>

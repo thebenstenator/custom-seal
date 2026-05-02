@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { Upload, ExternalLink } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";

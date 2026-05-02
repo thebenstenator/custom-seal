@@ -1,22 +1,21 @@
 import * as THREE from "three";
 
-/**
- * Derives approximate hardpoints from a glasses geometry bounding box.
- * Used as a fallback when a frame has no artist-supplied hardpoints.
- *
- * Confirmed axis layout from bbox logging (default-glasses.stl):
- *   X = left-right  (wide axis, ±73 units)
- *   Y = up-down     (±20 units)
- *   Z = depth       (narrow axis, ±5 units — frame thickness)
- *
- * Face-side = bb.max.z: the full scene transform is mesh rotation [0,PI/2,0]
- * inside group rotation [0,PI/2,0] = combined [0,PI,0]. The resulting world_z
- * formula is: world_z = -0.01*lz + 0.875. Higher lz → lower world_z → closer
- * to face. So bb.max.z is the face-side edge.
- */
-export function deriveHardpointsFromBbox(geometry) {
+export interface Hardpoints {
+  hp_left_outer_top: THREE.Vector3;
+  hp_left_outer_bottom: THREE.Vector3;
+  hp_left_inner_top: THREE.Vector3;
+  hp_left_inner_bottom: THREE.Vector3;
+  hp_right_inner_top: THREE.Vector3;
+  hp_right_inner_bottom: THREE.Vector3;
+  hp_right_outer_top: THREE.Vector3;
+  hp_right_outer_bottom: THREE.Vector3;
+  hp_nose_left: THREE.Vector3;
+  hp_nose_right: THREE.Vector3;
+}
+
+export function deriveHardpointsFromBbox(geometry: THREE.BufferGeometry): Hardpoints {
   geometry.computeBoundingBox();
-  const bb = geometry.boundingBox;
+  const bb = geometry.boundingBox!;
 
   const faceZ = bb.max.z;
 
@@ -40,9 +39,7 @@ export function deriveHardpointsFromBbox(geometry) {
   };
 }
 
-// Full perimeter loop: left outer (top→bottom) → across bottom (nose bridge) →
-// right outer (bottom→top) → across top → closes back to left outer top.
-export const DEFAULT_SEAL_LOOP = [
+export const DEFAULT_SEAL_LOOP: string[] = [
   "hp_left_outer_top",
   "hp_left_outer_bottom",
   "hp_left_inner_bottom",
@@ -55,14 +52,13 @@ export const DEFAULT_SEAL_LOOP = [
   "hp_left_inner_top",
 ];
 
-/**
- * Applies a Three.js Object3D world matrix to a map of local-space hardpoints,
- * returning world-space Vector3s. Call this after the glasses mesh is positioned.
- */
-export function transformHardpoints(hardpoints, matrixWorld) {
-  const result = {};
+export function transformHardpoints(
+  hardpoints: Hardpoints,
+  matrixWorld: THREE.Matrix4,
+): Record<string, THREE.Vector3> {
+  const result: Record<string, THREE.Vector3> = {};
   for (const [name, localPos] of Object.entries(hardpoints)) {
-    result[name] = localPos.clone().applyMatrix4(matrixWorld);
+    result[name] = (localPos as THREE.Vector3).clone().applyMatrix4(matrixWorld);
   }
   return result;
 }

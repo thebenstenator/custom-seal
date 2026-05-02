@@ -1,0 +1,228 @@
+.measure-input {
+  max-width: 70rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.measure-input__callout {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  font-size: 0.875rem;
+  color: #1e40af;
+  line-height: 1.6;
+}
+
+.measure-input__callout code {
+  background: #dbeafe;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-family: "Courier New", monospace;
+  font-size: 0.85em;
+}
+
+.measure-input__layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.measure-input__form {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.measure-input__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.measure-input__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.measure-input__input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.measure-input__number {
+  width: 80px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  font-family: "Courier New", monospace;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  background: #f9fafb;
+  text-align: right;
+}
+
+.measure-input__number:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: white;
+}
+
+.measure-input__number::-webkit-inner-spin-button,
+.measure-input__number::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.measure-input__unit {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.measure-input__reset {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.measure-input__reset:hover {
+  color: #2563eb;
+}
+
+.measure-input__hint {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.measure-input__photo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.measure-input__photo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #374151;
+  transition: all 0.15s;
+  align-self: flex-start;
+}
+
+.measure-input__photo-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.measure-input__photo-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.measure-input__photo-img {
+  max-height: 160px;
+  max-width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid #e5e7eb;
+  object-fit: contain;
+}
+
+.measure-input__photo-remove {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.measure-input__photo-remove:hover {
+  color: #dc2626;
+}
+
+.measure-input__hidden-input {
+  display: none;
+}
+
+.measure-input__submit {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.measure-input__submit:hover {
+  background: #1d4ed8;
+}
+
+.measure-input__submit:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.measure-input__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.measure-input__canvas {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  height: 480px;
+}
+
+.measure-input__preview-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .measure-input__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .measure-input__canvas {
+    height: 360px;
+  }
+}

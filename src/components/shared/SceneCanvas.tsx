@@ -1,8 +1,17 @@
-import React, { Suspense } from "react";
+import { Suspense } from "react";
+import type { ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 
-export default function SceneCanvas({ cameraPosition = [0, 0, 4.5], children }) {
+interface SceneCanvasProps {
+  cameraPosition?: [number, number, number];
+  children?: ReactNode;
+}
+
+export default function SceneCanvas({
+  cameraPosition = [0, 0, 4.5],
+  children,
+}: SceneCanvasProps) {
   return (
     <Canvas camera={{ position: cameraPosition, fov: 50 }}>
       <Suspense fallback={null}>

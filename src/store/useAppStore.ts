@@ -1,33 +1,66 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import * as THREE from "three";
+import type { Frame } from "../data/frames";
+import type { Measurements } from "../utils/geometry/parametricSeal";
 
-export const DEFAULT_GLASSES_POSITION = [-0.875, 0.405, -0.025];
-export const DEFAULT_GLASSES_ROTATION = [0, Math.PI / 2, 0];
+export const DEFAULT_GLASSES_POSITION: [number, number, number] = [-0.875, 0.405, -0.025];
+export const DEFAULT_GLASSES_ROTATION: [number, number, number] = [0, Math.PI / 2, 0];
 export const DEFAULT_GLASSES_SCALE = 0.01;
-export const DEFAULT_HEAD_ROTATION = [0, 0, 0];
+export const DEFAULT_HEAD_ROTATION: [number, number, number] = [0, 0, 0];
 
-export const useAppStore = create(
+interface AppState {
+  selectedFrame: Frame | null;
+  userScan: null;
+
+  glassesPosition: [number, number, number];
+  glassesRotation: [number, number, number];
+  glassesScale: number;
+  headRotation: [number, number, number];
+
+  hardpoints: THREE.Vector3[] | null;
+  generatedSeal: THREE.BufferGeometry | null;
+
+  measurements: Measurements | null;
+  measurementMode: boolean;
+
+  sealTrigger: number;
+
+  setSelectedFrame: (frame: Frame | null) => void;
+  setUserScan: (scan: null) => void;
+
+  setGlassesPosition: (position: [number, number, number]) => void;
+  setGlassesRotation: (rotation: [number, number, number]) => void;
+  setGlassesScale: (scale: number) => void;
+  setHeadRotation: (rotation: [number, number, number]) => void;
+
+  setHardpoints: (hardpoints: THREE.Vector3[] | null) => void;
+  setGeneratedSeal: (geometry: THREE.BufferGeometry | null) => void;
+
+  setMeasurements: (m: Measurements | null) => void;
+  setMeasurementMode: (v: boolean) => void;
+
+  triggerSealGeneration: () => void;
+  resetAlignment: () => void;
+}
+
+export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      // Step data
       selectedFrame: null,
       userScan: null,
 
-      // Alignment
       glassesPosition: DEFAULT_GLASSES_POSITION,
       glassesRotation: DEFAULT_GLASSES_ROTATION,
       glassesScale: DEFAULT_GLASSES_SCALE,
       headRotation: DEFAULT_HEAD_ROTATION,
 
-      // Geometry pipeline (not persisted — Three.js objects can't serialize)
       hardpoints: null,
       generatedSeal: null,
 
-      // Measurement-based flow
       measurements: null,
       measurementMode: false,
 
-      // Actions
       setSelectedFrame: (frame) => set({ selectedFrame: frame }),
       setUserScan: (scan) => set({ userScan: scan }),
 

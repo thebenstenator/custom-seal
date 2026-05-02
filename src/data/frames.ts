@@ -1,14 +1,16 @@
-/**
- * Frame library.
- *
- * modelUrl:      Path to the GLB file (null = placeholder, uses default STL)
- * affiliateUrl:  Amazon/retailer affiliate link for this specific frame
- * hardpoints:    Null when using the default STL demo model.
- *                Populated by the GLB loader for real artist-supplied models
- *                (hardpoints are embedded as named empty nodes with hp_ prefix).
- * sealLoop:      Ordered array of hardpoint names defining the seal boundary ring.
- */
-export const frames = [
+export interface Frame {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  popular: boolean;
+  modelUrl: string | null;
+  affiliateUrl: string | null;
+  hardpoints: null;
+  sealLoop: null;
+}
+
+export const frames: Frame[] = [
   {
     id: "aviator",
     name: "Aviator Style",

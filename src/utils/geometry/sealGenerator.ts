@@ -1,34 +1,38 @@
 import * as THREE from "three";
-import { MeshBVH } from "three-mesh-bvh";
+
+// three-mesh-bvh augments THREE.BufferGeometry with boundsTree/computeBoundsTree
+// (declared in three-mesh-bvh's own index.d.ts — we don't redeclare it here).
 
 /**
  * Assigns a BVH to the geometry. Kept for future face-scan raycasting.
  * Safe to call multiple times — no-op if already built.
  */
-export function buildFaceBVH(geometry) {
+export function buildFaceBVH(geometry: THREE.BufferGeometry): void {
   if (geometry.boundsTree) return;
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
-  geometry.boundsTree = new MeshBVH(geometry);
+  geometry.computeBoundsTree();
 }
 
-function extrudeAlongNormal(worldPath, faceNormal, depth) {
+function extrudeAlongNormal(
+  worldPath: THREE.Vector3[],
+  faceNormal: THREE.Vector3,
+  depth: number,
+): THREE.Vector3[] {
   return worldPath.map((p) => p.clone().addScaledVector(faceNormal, depth));
 }
 
-/**
- * Computes the outward radial offset vector at each point of a loop.
- * Direction = centroid → point, projected onto the seal plane (perpendicular
- * to faceNormal), normalised and scaled to halfWall.
- */
-function radialOffsets(loop, faceNormal, halfWall) {
+function radialOffsets(
+  loop: THREE.Vector3[],
+  faceNormal: THREE.Vector3,
+  halfWall: number,
+): THREE.Vector3[] {
   const centroid = new THREE.Vector3();
   for (const p of loop) centroid.add(p);
   centroid.divideScalar(loop.length);
 
   return loop.map((p) => {
     const r = p.clone().sub(centroid);
-    // Remove faceNormal component so offset stays in the seal plane
     r.addScaledVector(faceNormal, -r.dot(faceNormal));
     const len = r.length();
     return len > 1e-6
@@ -37,33 +41,24 @@ function radialOffsets(loop, faceNormal, halfWall) {
   });
 }
 
-/**
- * Builds a solid quad-tube band between glassesEdge and faceEdge.
- * Each quad cross-section has four walls:
- *   - outer wall  (faces away from loop centroid)
- *   - inner wall  (faces toward loop centroid)
- *   - glasses cap (faces away from face, closes the frame-side edge)
- *   - face cap    (faces toward face, closes the face-side edge)
- *
- * Vertex layout (4n total):
- *   0   .. n-1  : outer glasses edge
- *   n   .. 2n-1 : inner glasses edge
- *   2n  .. 3n-1 : outer face edge
- *   3n  .. 4n-1 : inner face edge
- */
-function buildThickBand(glassesEdge, faceEdge, faceNormal, wallThickness) {
+function buildThickBand(
+  glassesEdge: THREE.Vector3[],
+  faceEdge: THREE.Vector3[],
+  faceNormal: THREE.Vector3,
+  wallThickness: number,
+): THREE.BufferGeometry | null {
   const n = Math.min(glassesEdge.length, faceEdge.length);
   if (n < 3) return null;
 
   const offsets = radialOffsets(glassesEdge, faceNormal, wallThickness / 2);
 
-  const og  = glassesEdge.map((p, i) => p.clone().add(offsets[i]));   // outer glasses
-  const ig  = glassesEdge.map((p, i) => p.clone().sub(offsets[i]));   // inner glasses
-  const of_ = faceEdge.map((p, i)    => p.clone().add(offsets[i]));   // outer face
-  const if_ = faceEdge.map((p, i)    => p.clone().sub(offsets[i]));   // inner face
+  const og  = glassesEdge.map((p, i) => p.clone().add(offsets[i]));
+  const ig  = glassesEdge.map((p, i) => p.clone().sub(offsets[i]));
+  const of_ = faceEdge.map((p, i)    => p.clone().add(offsets[i]));
+  const if_ = faceEdge.map((p, i)    => p.clone().sub(offsets[i]));
 
   const positions = new Float32Array(n * 4 * 3);
-  const set = (idx, v) => {
+  const set = (idx: number, v: THREE.Vector3) => {
     positions[idx * 3]     = v.x;
     positions[idx * 3 + 1] = v.y;
     positions[idx * 3 + 2] = v.z;
@@ -75,26 +70,18 @@ function buildThickBand(glassesEdge, faceEdge, faceNormal, wallThickness) {
     set(3*n + i, if_[i]);
   }
 
-  const indices = [];
+  const indices: number[] = [];
   const isClosedLoop = glassesEdge[0].distanceTo(glassesEdge[n - 1]) < 0.1;
   const segs = isClosedLoop ? n : n - 1;
 
   for (let i = 0; i < segs; i++) {
     const j = (i + 1) % n;
-
-    // Outer wall (normal points outward from centroid)
     indices.push(i,      j,      2*n+i);
     indices.push(j,      2*n+j,  2*n+i);
-
-    // Inner wall (normal points inward toward centroid)
     indices.push(n+i,    3*n+i,  n+j);
     indices.push(n+j,    3*n+i,  3*n+j);
-
-    // Glasses-side cap (normal points away from face)
     indices.push(i,      n+i,    j);
     indices.push(n+i,    n+j,    j);
-
-    // Face-side cap (normal points toward face)
     indices.push(2*n+i,  2*n+j,  3*n+i);
     indices.push(2*n+j,  3*n+j,  3*n+i);
   }
@@ -106,30 +93,34 @@ function buildThickBand(glassesEdge, faceEdge, faceNormal, wallThickness) {
   return geo;
 }
 
-// ~5mm depth toward face, ~0.9mm wall thickness (at glasses scale 0.01)
-const SEAL_DEPTH      = 0.05;
-const WALL_THICKNESS  = 0.009;
+const SEAL_DEPTH     = 0.05;
+const WALL_THICKNESS = 0.009;
 
-export function generateSeal(worldSealPath, faceNormal) {
+export function generateSeal(
+  worldSealPath: THREE.Vector3[],
+  faceNormal: THREE.Vector3,
+): THREE.BufferGeometry | null {
   if (!worldSealPath || worldSealPath.length < 3) return null;
   const faceEdge = extrudeAlongNormal(worldSealPath, faceNormal, SEAL_DEPTH);
   return buildThickBand(worldSealPath, faceEdge, faceNormal, WALL_THICKNESS);
 }
 
-function mergeGeos(geos) {
-  const valid = geos.filter(Boolean);
+function mergeGeos(geos: Array<THREE.BufferGeometry | null>): THREE.BufferGeometry | null {
+  const valid = geos.filter((g): g is THREE.BufferGeometry => g !== null);
   if (valid.length === 0) return null;
   if (valid.length === 1) return valid[0];
 
   const totalVerts = valid.reduce((s, g) => s + g.attributes.position.count, 0);
   const positions = new Float32Array(totalVerts * 3);
-  const indices = [];
+  const indices: number[] = [];
   let vertOffset = 0, posOffset = 0;
   for (const g of valid) {
-    positions.set(g.attributes.position.array, posOffset);
-    for (const idx of g.index.array) indices.push(idx + vertOffset);
+    positions.set(g.attributes.position.array as Float32Array, posOffset);
+    for (const idx of (g.index!.array as Uint32Array | Uint16Array)) {
+      indices.push(idx + vertOffset);
+    }
     vertOffset += g.attributes.position.count;
-    posOffset  += g.attributes.position.array.length;
+    posOffset  += (g.attributes.position.array as Float32Array).length;
   }
   const merged = new THREE.BufferGeometry();
   merged.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -138,9 +129,13 @@ function mergeGeos(geos) {
   return merged;
 }
 
-export function generateDualSeal(leftPath, rightPath, faceNormal) {
+export function generateDualSeal(
+  leftPath: THREE.Vector3[] | null,
+  rightPath: THREE.Vector3[] | null,
+  faceNormal: THREE.Vector3,
+): THREE.BufferGeometry | null {
   return mergeGeos([
-    leftPath?.length  >= 3 ? generateSeal(leftPath,  faceNormal) : null,
-    rightPath?.length >= 3 ? generateSeal(rightPath, faceNormal) : null,
+    leftPath  && leftPath.length  >= 3 ? generateSeal(leftPath,  faceNormal) : null,
+    rightPath && rightPath.length >= 3 ? generateSeal(rightPath, faceNormal) : null,
   ]);
 }

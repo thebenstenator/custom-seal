@@ -1,16 +1,20 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import { useAppStore } from "../../store/useAppStore";
+import type { Frame } from "../../data/frames";
 import "./FrameSelection.css";
 
-export default function FrameSelection({ frames }) {
+interface FrameSelectionProps {
+  frames: Frame[];
+}
+
+export default function FrameSelection({ frames }: FrameSelectionProps) {
   const navigate = useNavigate();
   const setSelectedFrame = useAppStore((s) => s.setSelectedFrame);
 
-  function handleFrameSelect(frame) {
+  function handleFrameSelect(frame: Frame) {
     setSelectedFrame(frame);
     navigate("/scan");
   }
