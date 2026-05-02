@@ -23,8 +23,8 @@ CustomSeal lets users create a perfectly fitted moisture chamber attachment for 
 
 - **Guided 3D Scanning** — Step-by-step instructions optimized for smartphone scanning apps, ensuring a usable scan every time
 - **Open Source Frame Library** — Community-driven 3D models of glasses frames, contributed by professionals and users
-- **Custom Seal Generation** _(coming soon)_ — Computes the gap between your face and glasses and generates a perfectly fitted seal
-- **3D Printable Output** _(coming soon)_ — Export custom STL files optimized for flexible filament like TPU
+- **Custom Seal Generation** — Automatically detects lens apertures from any glasses model (flat or curved frames) and generates a fitted seal path using face-contact surface boundary tracing
+- **3D Printable Output** — Export custom STL files optimized for flexible filament like TPU
 
 ## Getting Started
 
@@ -78,6 +78,7 @@ src/
 
 - **React** — Component-based UI library
 - **Vite** — Fast build tool and dev server
+- **Three.js / React Three Fiber** — 3D rendering and mesh processing
 - **Lucide React** — Icon library
 - **CSS (BEM)** — Block Element Modifier naming convention for maintainable styles
 
@@ -85,12 +86,12 @@ src/
 
 - [x] Landing page with project overview
 - [x] Frame style selection
+- [x] 3D scan upload and validation
+- [x] 3D model visualization (Three.js / React Three Fiber)
+- [x] Custom seal generation algorithm (face-contact boundary tracing)
+- [x] STL file export
 - [ ] 3D scanning guide and instructions
-- [ ] 3D scan upload and validation
 - [ ] Frame model library with community contributions
-- [ ] 3D model visualization (Three.js)
-- [ ] Custom seal generation algorithm (mesh processing)
-- [ ] STL file export
 - [ ] Backend for storing scans and submissions
 - [ ] 3D printing material and settings guide
 - [ ] GitHub workflow for contributing frame models
@@ -109,6 +110,27 @@ When scanning, follow these tips for the most accurate seal:
 - Capture your full face from forehead to chin
 - Slowly rotate around your face to ensure full coverage
 - Make sure the area around your eyes and nose bridge is clearly captured
+
+## Frame Model Requirements
+
+CustomSeal's seal detection works by tracing the boundary of the face-contact surface of the glasses frame. For the best results, frame models must meet the following requirements:
+
+### Required
+- **Front frame only** — Do not include temple arms (the parts that hook over the ears). Temple arms extend the model's bounding box in ways that interfere with detection. Export or model just the front frame section.
+- **Open lens apertures** — The lens holes must be actual through-holes in the mesh (not filled with lens geometry). The seal is generated from the inner boundary of these holes.
+- **Closed solid mesh** — The frame should be a watertight solid (no open edges, no missing faces). This is the standard output from most 3D modeling tools.
+- **Reasonable proportions** — The front frame should be significantly wider than it is tall (typically 3:1 or greater width-to-height ratio). Very square or tall models may produce unexpected results.
+
+### Supported File Formats
+- **STL** — Recommended. Export from Blender or any CAD tool in millimeter units.
+- **GLB / GLTF** — Supported. Models are auto-scaled to match STL proportions on import.
+- **OBJ, PLY** — Supported with the same auto-scaling.
+
+### Tips for Artists
+- Model in millimeters. A typical glasses front frame is 120–150 mm wide, 35–55 mm tall, and 5–15 mm deep.
+- Curved frames are fully supported — the algorithm traces the actual 3D face-contact surface, so curvature is preserved in the seal output.
+- The frame's thinnest dimension (depth) should be along the Z axis in your modeling software, with width along X and height along Y. If you export in a different orientation, the tool will attempt to auto-correct it.
+- Test your model in the tool before finalizing — click **Generate Seal Preview** and check that the blue seal outline follows the inner edge of each lens aperture on the face-contact side.
 
 ## Contributing
 
