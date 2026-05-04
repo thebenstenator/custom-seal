@@ -69,6 +69,11 @@
   color: #9ca3af;
 }
 
+.fit-card__icon-wrap--green {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
 /* ---- Text ---- */
 
 .fit-card__title {
@@ -139,6 +144,28 @@
   color: #6b7280;
   padding: 0.25rem 0.625rem;
   border-radius: 999px;
+}
+
+/* ---- Download link ---- */
+
+.fit-card__download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  background: #16a34a;
+  color: white;
+  text-decoration: none;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: background 0.15s;
+  width: fit-content;
+}
+
+.fit-card__download:hover {
+  background: #15803d;
 }
 
 /* ---- Notify button ---- */

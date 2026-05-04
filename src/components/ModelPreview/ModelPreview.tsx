@@ -227,11 +227,39 @@ function SealGenerator({
       eyePaths = { leftPath: remap(eyePaths.leftPath), rightPath: remap(eyePaths.rightPath) };
     }
 
-    const leftWorld = toWorld(eyePaths?.leftPath ?? null);
+    const leftWorld  = toWorld(eyePaths?.leftPath  ?? null);
     const rightWorld = toWorld(eyePaths?.rightPath ?? null);
     const sealNormal = best?.quality !== "good" ? correctedFaceNormal : faceNormal;
+
+    // Build BVH on the head mesh once for fast raycasting
+    if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
+
+    // For each world-space seal point, cast a ray toward the head surface.
+    // The intersection depth replaces the flat 5 mm fallback, so the seal
+    // wall follows the actual face contour.
+    const rc = new THREE.Raycaster();
+    rc.near = 0.002; // ignore hits closer than 2 mm (frame thickness noise)
+    rc.far  = 0.5;   // cap at 500 mm — anything further is misaligned
+
+    function conformedEdge(pts: THREE.Vector3[] | null): THREE.Vector3[] | null {
+      if (!pts) return null;
+      return pts.map((p) => {
+        rc.set(p, correctedFaceNormal);
+        const hits = rc.intersectObject(head!, false);
+        if (hits.length > 0) {
+          // Sit 1 mm inside the face surface so the seal presses in slightly
+          return hits[0].point.clone().addScaledVector(correctedFaceNormal, 0.001);
+        }
+        // No hit — fall back to flat 5 mm extrusion
+        return p.clone().addScaledVector(correctedFaceNormal, 0.05);
+      });
+    }
+
+    const leftEdge  = conformedEdge(leftWorld);
+    const rightEdge = conformedEdge(rightWorld);
+
     let sealGeometry = eyePaths
-      ? generateDualSeal(leftWorld, rightWorld, sealNormal)
+      ? generateDualSeal(leftWorld, rightWorld, sealNormal, leftEdge, rightEdge)
       : null;
     const worldHardpoints = [...(leftWorld ?? []), ...(rightWorld ?? [])];
     console.log(

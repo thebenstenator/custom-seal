@@ -1,25 +1,21 @@
 import { useNavigate, Navigate } from "react-router-dom";
-import { ScanFace, Shapes } from "lucide-react";
+import { ScanFace, Shapes, Download } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import Button from "../shared/Button";
 import "./FitType.css";
 
 export default function FitType() {
-  const navigate = useNavigate();
+  const navigate     = useNavigate();
   const selectedFrame = useAppStore((s) => s.selectedFrame);
-  const setFitType    = useAppStore((s) => s.setFitType);
+  const setFitType   = useAppStore((s) => s.setFitType);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
+
+  const hasGenericSeal = Boolean(selectedFrame.genericSealUrl);
 
   function chooseCustom() {
     setFitType("custom");
     navigate("/scan");
-  }
-
-  function chooseStandard() {
-    setFitType("standard");
-    // Standard fit is not yet built — stay on this page and show a notice
-    // (handled via state below — navigate when ready)
   }
 
   return (
@@ -57,31 +53,52 @@ export default function FitType() {
         </button>
 
         {/* Standard fit */}
-        <div className="fit-card fit-card--soon">
-          <div className="fit-card__soon-badge">Coming Soon</div>
-          <div className="fit-card__icon-wrap fit-card__icon-wrap--gray">
-            <Shapes size={40} strokeWidth={1.5} />
+        {hasGenericSeal ? (
+          <div className="fit-card fit-card--active fit-card--standard">
+            <div className="fit-card__icon-wrap fit-card__icon-wrap--green">
+              <Shapes size={40} strokeWidth={1.5} />
+            </div>
+            <h3 className="fit-card__title">Standard Fit</h3>
+            <p className="fit-card__description">
+              A well-fitting seal designed for <strong>most face shapes</strong>,
+              generated against our reference mannequin. No scan required.
+            </p>
+            <ul className="fit-card__perks">
+              <li>No scanning needed</li>
+              <li>Good fit for average face shapes</li>
+              <li>Ready to print immediately</li>
+            </ul>
+            <a
+              href={selectedFrame.genericSealUrl!}
+              download={`seal-${selectedFrame.id}-standard.stl`}
+              className="fit-card__download"
+              onClick={() => setFitType("standard")}
+            >
+              <Download size={18} />
+              Download Standard Seal
+            </a>
           </div>
-          <h3 className="fit-card__title">Standard Fit</h3>
-          <p className="fit-card__description">
-            A well-fitting seal designed for <strong>most face shapes</strong>.
-            No scan required — just download and print.
-          </p>
-          <ul className="fit-card__perks">
-            <li>No scanning needed</li>
-            <li>Good fit for average face shapes</li>
-            <li>Ready to print immediately</li>
-          </ul>
-          <span className="fit-card__cta fit-card__cta--muted">
-            Available soon
-          </span>
-          <button
-            className="fit-card__notify"
-            onClick={chooseStandard}
-          >
-            Notify me when ready
-          </button>
-        </div>
+        ) : (
+          <div className="fit-card fit-card--soon">
+            <div className="fit-card__soon-badge">Coming Soon</div>
+            <div className="fit-card__icon-wrap fit-card__icon-wrap--gray">
+              <Shapes size={40} strokeWidth={1.5} />
+            </div>
+            <h3 className="fit-card__title">Standard Fit</h3>
+            <p className="fit-card__description">
+              A well-fitting seal designed for <strong>most face shapes</strong>,
+              generated against our reference mannequin. No scan required.
+            </p>
+            <ul className="fit-card__perks">
+              <li>No scanning needed</li>
+              <li>Good fit for average face shapes</li>
+              <li>Ready to print immediately</li>
+            </ul>
+            <span className="fit-card__cta fit-card__cta--muted">
+              Not yet available for this frame
+            </span>
+          </div>
+        )}
 
       </div>
     </div>

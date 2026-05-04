@@ -93,16 +93,24 @@ function buildThickBand(
   return geo;
 }
 
-const SEAL_DEPTH     = 0.05;
+export const SEAL_DEPTH     = 0.05; // fallback flat depth (5 mm at 0.01 scale)
 const WALL_THICKNESS = 0.009;
 
+/**
+ * Builds a seal band.
+ * @param worldSealPath - points on the glasses frame at the face-contact surface
+ * @param faceNormal    - direction pointing toward the face
+ * @param faceEdge      - optional per-point face positions (from head raycasting);
+ *                        falls back to a uniform SEAL_DEPTH extrusion when omitted
+ */
 export function generateSeal(
   worldSealPath: THREE.Vector3[],
   faceNormal: THREE.Vector3,
+  faceEdge?: THREE.Vector3[],
 ): THREE.BufferGeometry | null {
   if (!worldSealPath || worldSealPath.length < 3) return null;
-  const faceEdge = extrudeAlongNormal(worldSealPath, faceNormal, SEAL_DEPTH);
-  return buildThickBand(worldSealPath, faceEdge, faceNormal, WALL_THICKNESS);
+  const edge = faceEdge ?? extrudeAlongNormal(worldSealPath, faceNormal, SEAL_DEPTH);
+  return buildThickBand(worldSealPath, edge, faceNormal, WALL_THICKNESS);
 }
 
 function mergeGeos(geos: Array<THREE.BufferGeometry | null>): THREE.BufferGeometry | null {
@@ -130,12 +138,16 @@ function mergeGeos(geos: Array<THREE.BufferGeometry | null>): THREE.BufferGeomet
 }
 
 export function generateDualSeal(
-  leftPath: THREE.Vector3[] | null,
+  leftPath:  THREE.Vector3[] | null,
   rightPath: THREE.Vector3[] | null,
   faceNormal: THREE.Vector3,
+  leftEdge?:  THREE.Vector3[] | null,
+  rightEdge?: THREE.Vector3[] | null,
 ): THREE.BufferGeometry | null {
   return mergeGeos([
-    leftPath  && leftPath.length  >= 3 ? generateSeal(leftPath,  faceNormal) : null,
-    rightPath && rightPath.length >= 3 ? generateSeal(rightPath, faceNormal) : null,
+    leftPath  && leftPath.length  >= 3
+      ? generateSeal(leftPath,  faceNormal, leftEdge  ?? undefined) : null,
+    rightPath && rightPath.length >= 3
+      ? generateSeal(rightPath, faceNormal, rightEdge ?? undefined) : null,
   ]);
 }

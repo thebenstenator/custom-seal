@@ -6,6 +6,7 @@ export interface Frame {
   popular: boolean;
   modelUrl: string | null;
   affiliateUrl: string | null;
+  genericSealUrl: string | null; // pre-baked STL generated against the mannequin head
   hardpoints: null;
   sealLoop: null;
 }
@@ -19,6 +20,7 @@ export const frames: Frame[] = [
     popular: true,
     modelUrl: null,
     affiliateUrl: null,
+    genericSealUrl: null,
     hardpoints: null,
     sealLoop: null,
   },
@@ -30,6 +32,7 @@ export const frames: Frame[] = [
     popular: true,
     modelUrl: null,
     affiliateUrl: null,
+    genericSealUrl: null,
     hardpoints: null,
     sealLoop: null,
   },
@@ -41,6 +44,7 @@ export const frames: Frame[] = [
     popular: false,
     modelUrl: null,
     affiliateUrl: null,
+    genericSealUrl: null,
     hardpoints: null,
     sealLoop: null,
   },
@@ -52,6 +56,7 @@ export const frames: Frame[] = [
     popular: false,
     modelUrl: null,
     affiliateUrl: null,
+    genericSealUrl: null,
     hardpoints: null,
     sealLoop: null,
   },
