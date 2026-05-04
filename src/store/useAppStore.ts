@@ -23,6 +23,7 @@ interface AppState {
 
   measurements: Measurements | null;
   measurementMode: boolean;
+  fitType: "custom" | "standard" | null;
 
   sealTrigger: number;
 
@@ -39,6 +40,7 @@ interface AppState {
 
   setMeasurements: (m: Measurements | null) => void;
   setMeasurementMode: (v: boolean) => void;
+  setFitType: (t: "custom" | "standard" | null) => void;
 
   triggerSealGeneration: () => void;
   resetAlignment: () => void;
@@ -60,6 +62,7 @@ export const useAppStore = create<AppState>()(
 
       measurements: null,
       measurementMode: false,
+      fitType: null,
 
       setSelectedFrame: (frame) => set({ selectedFrame: frame }),
       setUserScan: (scan) => set({ userScan: scan }),
@@ -74,6 +77,7 @@ export const useAppStore = create<AppState>()(
 
       setMeasurements: (m) => set({ measurements: m }),
       setMeasurementMode: (v) => set({ measurementMode: v }),
+      setFitType: (t) => set({ fitType: t }),
 
       sealTrigger: 0,
       triggerSealGeneration: () => set((s) => ({ sealTrigger: s.sealTrigger + 1 })),

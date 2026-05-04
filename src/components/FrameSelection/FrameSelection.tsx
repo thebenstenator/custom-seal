@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import Button from "../shared/Button";
-import Notice from "../shared/Notice";
 import { useAppStore } from "../../store/useAppStore";
 import type { Frame } from "../../data/frames";
 import "./FrameSelection.css";
@@ -16,7 +15,7 @@ export default function FrameSelection({ frames }: FrameSelectionProps) {
 
   function handleFrameSelect(frame: Frame) {
     setSelectedFrame(frame);
-    navigate("/scan");
+    navigate("/fit-type");
   }
 
   return (
@@ -25,43 +24,53 @@ export default function FrameSelection({ frames }: FrameSelectionProps) {
         <Button variant="back" onClick={() => navigate("/")}>
           ← Back
         </Button>
-        <h2 className="page-header__title">Select Your Frame Style</h2>
+        <h2 className="page-header__title">Choose Your Frame</h2>
         <p className="page-header__subtitle">
-          Choose the style that best matches your glasses
+          Select a compatible frame below, or request yours if it's not listed.
         </p>
       </div>
 
-      <div className="frame-grid">
-        {frames.map((frame) => (
-          <button
-            key={frame.id}
-            onClick={() => handleFrameSelect(frame)}
-            className={`frame-card ${frame.popular ? "frame-card--popular" : ""}`}
-          >
-            <div className="frame-card__content">
-              <div className="frame-card__image">{frame.image}</div>
+      {frames.length > 0 ? (
+        <div className="frame-grid">
+          {frames.map((frame) => (
+            <button
+              key={frame.id}
+              onClick={() => handleFrameSelect(frame)}
+              className={`frame-card ${frame.popular ? "frame-card--popular" : ""}`}
+            >
+              {frame.popular && (
+                <span className="frame-card__badge">Popular</span>
+              )}
+              <div className="frame-card__thumbnail">{frame.image}</div>
               <div className="frame-card__info">
-                <div className="frame-card__header">
-                  <h3 className="frame-card__title">{frame.name}</h3>
-                  {frame.popular && (
-                    <span className="badge badge--popular">Popular</span>
-                  )}
-                </div>
+                <h3 className="frame-card__title">{frame.name}</h3>
                 <p className="frame-card__description">{frame.description}</p>
               </div>
-              <ChevronRight className="frame-card__arrow" />
-            </div>
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="frames__empty">
+          <p>No frames in the library yet — be the first to request one!</p>
+        </div>
+      )}
 
-      <Notice variant="gray">
-        <p className="notice__title">Don't see your frame style?</p>
-        <p className="notice__text">
-          This is an open source project - contribute your frame model on GitHub
-          or request a new style for our next release.
-        </p>
-      </Notice>
+      <div className="frames__request">
+        <div className="frames__request-text">
+          <h3 className="frames__request-title">Don't see your frame?</h3>
+          <p className="frames__request-subtitle">
+            Submit your glasses and we'll model them for free. Once added,
+            anyone with the same frame can use it.
+          </p>
+        </div>
+        <button
+          className="frames__request-btn"
+          onClick={() => navigate("/request-frame")}
+        >
+          <PlusCircle size={18} />
+          Request a Frame
+        </button>
+      </div>
     </div>
   );
 }

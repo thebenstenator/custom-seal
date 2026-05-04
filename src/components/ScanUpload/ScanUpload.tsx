@@ -39,7 +39,7 @@ export default function ScanUpload() {
   return (
     <div className="scan-upload">
       <div className="page-header">
-        <Button variant="back" onClick={() => navigate("/frames")}>
+        <Button variant="back" onClick={() => navigate("/fit-type")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Scan Your Face</h2>
@@ -155,18 +155,6 @@ export default function ScanUpload() {
           <Button variant="primary" fullWidth onClick={() => navigate("/preview")}>
             Continue to Alignment (Demo)
           </Button>
-
-          <div className="scan-upload__measure-alt">
-            <span className="scan-upload__measure-alt-label">
-              Don't have a scan?
-            </span>
-            <button
-              className="scan-upload__measure-link"
-              onClick={() => navigate("/measure")}
-            >
-              Use measurements instead →
-            </button>
-          </div>
         </div>
       </div>
     </div>
