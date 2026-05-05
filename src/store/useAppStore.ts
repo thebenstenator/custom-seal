@@ -9,9 +9,18 @@ export const DEFAULT_GLASSES_ROTATION: [number, number, number] = [0, Math.PI / 
 export const DEFAULT_GLASSES_SCALE = 0.01;
 export const DEFAULT_HEAD_ROTATION: [number, number, number] = [0, 0, 0];
 
+// Raw edge paths stored after seal generation — used to produce TPU flat export.
+export interface SealRawEdges {
+  leftPath:   THREE.Vector3[] | null;
+  rightPath:  THREE.Vector3[] | null;
+  leftFace:   THREE.Vector3[] | null;
+  rightFace:  THREE.Vector3[] | null;
+  faceNormal: THREE.Vector3;
+}
+
 interface AppState {
   selectedFrame: Frame | null;
-  userScan: null;
+  userScan: File | null;
 
   glassesPosition: [number, number, number];
   glassesRotation: [number, number, number];
@@ -20,6 +29,7 @@ interface AppState {
 
   hardpoints: THREE.Vector3[] | null;
   generatedSeal: THREE.BufferGeometry | null;
+  sealRawEdges: SealRawEdges | null;
 
   measurements: Measurements | null;
   measurementMode: boolean;
@@ -28,7 +38,7 @@ interface AppState {
   sealTrigger: number;
 
   setSelectedFrame: (frame: Frame | null) => void;
-  setUserScan: (scan: null) => void;
+  setUserScan: (scan: File | null) => void;
 
   setGlassesPosition: (position: [number, number, number]) => void;
   setGlassesRotation: (rotation: [number, number, number]) => void;
@@ -37,6 +47,7 @@ interface AppState {
 
   setHardpoints: (hardpoints: THREE.Vector3[] | null) => void;
   setGeneratedSeal: (geometry: THREE.BufferGeometry | null) => void;
+  setSealRawEdges: (edges: SealRawEdges | null) => void;
 
   setMeasurements: (m: Measurements | null) => void;
   setMeasurementMode: (v: boolean) => void;
@@ -59,13 +70,14 @@ export const useAppStore = create<AppState>()(
 
       hardpoints: null,
       generatedSeal: null,
+      sealRawEdges: null,
 
       measurements: null,
       measurementMode: false,
       fitType: null,
 
       setSelectedFrame: (frame) => set({ selectedFrame: frame }),
-      setUserScan: (scan) => set({ userScan: scan }),
+      setUserScan: (scan: File | null) => set({ userScan: scan }),
 
       setGlassesPosition: (position) => set({ glassesPosition: position }),
       setGlassesRotation: (rotation) => set({ glassesRotation: rotation }),
@@ -74,6 +86,7 @@ export const useAppStore = create<AppState>()(
 
       setHardpoints: (hardpoints) => set({ hardpoints }),
       setGeneratedSeal: (geometry) => set({ generatedSeal: geometry }),
+      setSealRawEdges: (edges) => set({ sealRawEdges: edges }),
 
       setMeasurements: (m) => set({ measurements: m }),
       setMeasurementMode: (v) => set({ measurementMode: v }),

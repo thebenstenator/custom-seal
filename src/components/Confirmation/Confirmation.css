@@ -29,25 +29,77 @@
   white-space: nowrap;
 }
 
-.confirmation__download {
+.confirmation__downloads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.confirmation__download-option {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.confirmation__download-info {
+  flex: 1;
+}
+
+.confirmation__download-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 0.25rem;
+}
+
+.confirmation__download-desc {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.confirmation__download-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 1rem;
-  background: #059669;
-  color: white;
+  padding: 0.75rem 1rem;
   border: none;
-  border-radius: 0.5rem;
-  font-size: 1.125rem;
+  border-radius: 0.375rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
 
-.confirmation__download:hover {
+.confirmation__download-btn--pla {
+  background: #2563eb;
+  color: white;
+}
+
+.confirmation__download-btn--pla:hover {
+  background: #1d4ed8;
+}
+
+.confirmation__download-btn--tpu {
+  background: #059669;
+  color: white;
+}
+
+.confirmation__download-btn--tpu:hover {
   background: #047857;
+}
+
+@media (max-width: 640px) {
+  .confirmation__downloads {
+    grid-template-columns: 1fr;
+  }
 }
 
 .confirmation__inline-link {

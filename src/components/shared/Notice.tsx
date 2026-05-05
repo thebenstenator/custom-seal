@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import "./Notice.css";
 
 interface NoticeProps {
-  variant?: "info" | "gray";
+  variant?: "info" | "gray" | "warning";
   children: ReactNode;
 }
 

@@ -1,40 +1,29 @@
+import { useRef } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
-import { Upload, ExternalLink } from "lucide-react";
+import { Upload, CheckCircle, ExternalLink } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
-import SceneCanvas from "../shared/SceneCanvas";
-import { useSTLModel } from "../../hooks/useSTLModel";
 import Button from "../shared/Button";
-import Notice from "../shared/Notice";
 import "./ScanUpload.css";
 
-function DefaultHeadModel() {
-  const geometry = useSTLModel("/models/default-head.stl");
-  return (
-    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} scale={0.01}>
-      <meshStandardMaterial color="#f4a582" />
-    </mesh>
-  );
-}
-
-function GlassesModel() {
-  const geometry = useSTLModel("/models/default-glasses.stl");
-  return (
-    <mesh
-      geometry={geometry}
-      rotation={[0, Math.PI / 2, 0]}
-      position={[-0.875, 0.405, -0.025]}
-      scale={0.01}
-    >
-      <meshStandardMaterial color="#333333" metalness={0.8} roughness={0.2} />
-    </mesh>
-  );
-}
-
 export default function ScanUpload() {
-  const navigate = useNavigate();
+  const navigate      = useNavigate();
   const selectedFrame = useAppStore((s) => s.selectedFrame);
+  const userScan      = useAppStore((s) => s.userScan);
+  const setUserScan   = useAppStore((s) => s.setUserScan);
+  const inputRef      = useRef<HTMLInputElement>(null);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const valid = [".obj", ".ply", ".stl", ".glb", ".gltf"];
+    if (!valid.some((ext) => file.name.toLowerCase().endsWith(ext))) {
+      alert("Please upload an OBJ, PLY, STL, GLB, or GLTF file.");
+      return;
+    }
+    setUserScan(file);
+  };
 
   return (
     <div className="scan-upload">
@@ -46,35 +35,6 @@ export default function ScanUpload() {
         <p className="page-header__subtitle">
           Selected frame:{" "}
           <span className="page-header__selected">{selectedFrame.name}</span>
-        </p>
-      </div>
-
-      <Notice variant="info">
-        <p className="notice__text">
-          <strong>Preview below:</strong> This shows how your selected glasses
-          will look. Follow the scanning instructions, then upload your face
-          scan to create a custom fit.
-        </p>
-      </Notice>
-
-      <div className="scan-upload__preview">
-        <h3 className="scan-upload__preview-title">
-          Preview: {selectedFrame.name}
-        </h3>
-        <div className="scan-upload__viewer">
-          <SceneCanvas>
-            <group rotation={[0, Math.PI / 2, 0]}>
-              <DefaultHeadModel />
-              <GlassesModel />
-            </group>
-          </SceneCanvas>
-          <p className="scan-upload__viewer-instructions">
-            Left-drag to rotate • Scroll to zoom • Right-drag to pan
-          </p>
-        </div>
-        <p className="scan-upload__preview-note">
-          This is a demo head. Upload your scan below to see YOUR face with
-          these glasses.
         </p>
       </div>
 
@@ -130,10 +90,10 @@ export default function ScanUpload() {
             <div className="scan-step">
               <div className="scan-step__number">4</div>
               <div className="scan-step__info">
-                <h4 className="scan-step__title">Export Your Scan</h4>
+                <h4 className="scan-step__title">Export &amp; Upload</h4>
                 <p className="scan-step__description">
-                  Export your scan as an OBJ, PLY, or STL file from your
-                  scanning app, then upload it below.
+                  Export your scan as an OBJ, PLY, or STL file, then upload it
+                  here. You'll align it with your glasses on the next page.
                 </p>
               </div>
             </div>
@@ -143,17 +103,50 @@ export default function ScanUpload() {
         <div className="scan-upload__form">
           <h3 className="scan-upload__form-title">Upload Your Face Scan</h3>
 
-          <div className="upload-area upload-area--disabled">
-            <Upload className="upload-area__icon" size={48} />
-            <p className="upload-area__title">Upload Feature Coming Soon</p>
-            <p className="upload-area__subtitle">
-              We're working on optimizing the upload and processing pipeline.
-              Continue below to try the alignment tool with a demo head model.
-            </p>
-          </div>
+          {userScan ? (
+            <div className="upload-success">
+              <CheckCircle className="upload-success__icon" size={40} />
+              <p className="upload-success__title">{userScan.name}</p>
+              <p className="upload-success__size">
+                {(userScan.size / 1024 / 1024).toFixed(1)} MB
+              </p>
+              <button
+                className="upload-success__change"
+                onClick={() => inputRef.current?.click()}
+              >
+                Change file
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".obj,.ply,.stl,.glb,.gltf"
+                onChange={handleFile}
+                style={{ display: "none" }}
+              />
+            </div>
+          ) : (
+            <label className="upload-area">
+              <Upload className="upload-area__icon" size={48} />
+              <p className="upload-area__title">Click to upload your scan</p>
+              <p className="upload-area__subtitle">
+                You'll align it with your glasses on the next page
+              </p>
+              <p className="upload-area__formats">OBJ · PLY · STL · GLB · GLTF</p>
+              <input
+                type="file"
+                accept=".obj,.ply,.stl,.glb,.gltf"
+                onChange={handleFile}
+                className="upload-area__input"
+              />
+            </label>
+          )}
 
-          <Button variant="primary" fullWidth onClick={() => navigate("/preview")}>
-            Continue to Alignment (Demo)
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={() => navigate("/preview")}
+          >
+            {userScan ? "Continue to Alignment →" : "Skip — Use Demo Head"}
           </Button>
         </div>
       </div>

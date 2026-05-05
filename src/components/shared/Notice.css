@@ -42,6 +42,10 @@
   font-size: 0.875rem;
 }
 
+.notice--warning .notice__title {
+  color: #78350f;
+}
+
 .notice--warning .notice__text {
   color: #92400e;
   font-size: 0.875rem;

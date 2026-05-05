@@ -3,17 +3,16 @@ import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter";
 import { Download } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
+import {
+  generateDualSeal,
+  flattenEdgesForTPU,
+} from "../../utils/geometry/sealGenerator";
 import SceneCanvas from "../shared/SceneCanvas";
-import { useSTLModel } from "../../hooks/useSTLModel";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
 import "./Confirmation.css";
 
-interface SealMeshProps {
-  geometry: THREE.BufferGeometry | null;
-}
-
-function SealMesh({ geometry }: SealMeshProps) {
+function SealMesh({ geometry }: { geometry: THREE.BufferGeometry | null }) {
   if (!geometry) return null;
   return (
     <mesh geometry={geometry}>
@@ -27,46 +26,80 @@ function SealMesh({ geometry }: SealMeshProps) {
   );
 }
 
-interface GlassesPreviewProps {
-  position: [number, number, number];
-  rotation: [number, number, number];
-  scale: number;
-}
-
-function GlassesPreview({ position, rotation, scale }: GlassesPreviewProps) {
-  const geometry = useSTLModel("/models/default-glasses.stl");
-  return (
-    <mesh geometry={geometry} position={position} rotation={rotation} scale={scale}>
-      <meshStandardMaterial color="#333333" metalness={0.8} roughness={0.2} />
-    </mesh>
-  );
+function exportSTL(geo: THREE.BufferGeometry, filename: string) {
+  const exporter = new STLExporter();
+  const mesh = new THREE.Mesh(geo);
+  const result = exporter.parse(mesh, { binary: true });
+  const blob = new Blob([result], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function Confirmation() {
   const navigate = useNavigate();
   const selectedFrame   = useAppStore((s) => s.selectedFrame);
   const generatedSeal   = useAppStore((s) => s.generatedSeal);
-  const glassesPosition = useAppStore((s) => s.glassesPosition);
-  const glassesRotation = useAppStore((s) => s.glassesRotation);
-  const glassesScale    = useAppStore((s) => s.glassesScale);
   const measurementMode = useAppStore((s) => s.measurementMode);
+  const sealRawEdges    = useAppStore((s) => s.sealRawEdges);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
-  const handleDownload = () => {
+  const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
+
+  const handlePLADownload = () => {
     if (!generatedSeal) return;
-    const exporter = new STLExporter();
-    const scaledGeo = generatedSeal.clone();
-    scaledGeo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
-    const mesh = new THREE.Mesh(scaledGeo);
-    const result = exporter.parse(mesh, { binary: true });
-    const blob = new Blob([result], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `seal-${selectedFrame.name.toLowerCase().replace(/\s+/g, "-")}.stl`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const geo = generatedSeal.clone();
+    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+    exportSTL(geo, `seal-${slug}-pla.stl`);
+  };
+
+  const handleTPUDownload = () => {
+    if (!generatedSeal) return;
+
+    let geo: THREE.BufferGeometry;
+
+    if (sealRawEdges && (sealRawEdges.leftPath || sealRawEdges.rightPath)) {
+      // Re-generate with both edges shifted together to preserve seal depth.
+      // The same per-point offset is applied to the frame and face sides so the
+      // frame→face distance is unchanged — the depth is not added to at curved areas.
+      const { leftPath, rightPath, leftFace, rightFace, faceNormal } = sealRawEdges;
+      const { flatFrame: flatLeft,  shiftedFace: shiftedLeftFace  } =
+        leftPath  && leftFace  ? flattenEdgesForTPU(leftPath,  leftFace,  faceNormal) : { flatFrame: null, shiftedFace: null };
+      const { flatFrame: flatRight, shiftedFace: shiftedRightFace } =
+        rightPath && rightFace ? flattenEdgesForTPU(rightPath, rightFace, faceNormal) : { flatFrame: null, shiftedFace: null };
+      const flat = generateDualSeal(flatLeft, flatRight, faceNormal, shiftedLeftFace, shiftedRightFace);
+      if (!flat) return;
+      geo = flat;
+    } else if (sealRawEdges) {
+      // Fallback seal (generated from bbox) — already flat, just use existing geometry.
+      geo = generatedSeal.clone();
+    } else {
+      // No raw edges stored — export as-is (user can re-generate).
+      geo = generatedSeal.clone();
+    }
+
+    // Scale to mm.
+    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+
+    // Rotate so flat (frame-contact) side faces the print bed (+Z up in slicer → frame side down).
+    if (sealRawEdges) {
+      const q = new THREE.Quaternion().setFromUnitVectors(
+        sealRawEdges.faceNormal.clone().normalize(),
+        new THREE.Vector3(0, 0, 1),
+      );
+      geo.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));
+    }
+
+    // Shift so minimum Z = 0 (flat side sits on print bed).
+    geo.computeBoundingBox();
+    const minZ = geo.boundingBox!.min.z;
+    if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
+
+    exportSTL(geo, `seal-${slug}-tpu-flat.stl`);
   };
 
   return (
@@ -88,16 +121,7 @@ export default function Confirmation() {
       {generatedSeal ? (
         <>
           <div className="confirmation__viewer">
-            <SceneCanvas cameraPosition={measurementMode ? [0, 0, 2] : [0, 0, 7.5]}>
-              {!measurementMode && (
-                <group rotation={[0, Math.PI / 2, 0]}>
-                  <GlassesPreview
-                    position={glassesPosition}
-                    rotation={glassesRotation}
-                    scale={glassesScale}
-                  />
-                </group>
-              )}
+            <SceneCanvas cameraPosition={[0, 0.5, 4]}>
               <SealMesh geometry={generatedSeal} />
             </SceneCanvas>
             <p className="confirmation__viewer-hint">
@@ -105,10 +129,39 @@ export default function Confirmation() {
             </p>
           </div>
 
-          <button className="confirmation__download" onClick={handleDownload}>
-            <Download size={20} />
-            Download STL
-          </button>
+          <div className="confirmation__downloads">
+            <div className="confirmation__download-option">
+              <div className="confirmation__download-info">
+                <h4 className="confirmation__download-title">PLA — Rigid</h4>
+                <p className="confirmation__download-desc">
+                  Prints in the seal's natural curved shape. Print curved-side
+                  down with supports. Good if you have PLA on hand.
+                </p>
+              </div>
+              <button className="confirmation__download-btn confirmation__download-btn--pla" onClick={handlePLADownload}>
+                <Download size={18} />
+                Download STL (PLA)
+              </button>
+            </div>
+
+            <div className="confirmation__download-option">
+              <div className="confirmation__download-info">
+                <h4 className="confirmation__download-title">TPU — Flexible</h4>
+                <p className="confirmation__download-desc">
+                  Frame-contact side is flattened so it prints face-down with no
+                  supports. TPU's flexibility lets it conform back to the curved
+                  frame when applied.
+                </p>
+              </div>
+              <button
+                className="confirmation__download-btn confirmation__download-btn--tpu"
+                onClick={handleTPUDownload}
+              >
+                <Download size={18} />
+                Download STL (TPU — Flat)
+              </button>
+            </div>
+          </div>
         </>
       ) : (
         <Notice variant="info">
@@ -124,20 +177,24 @@ export default function Confirmation() {
         </Notice>
       )}
 
+      <Notice variant="warning">
+        <h3 className="notice__title">Get a Better Fit Faster</h3>
+        <p className="notice__text">
+          Go back and export <strong>2–3 versions</strong> with the{" "}
+          <strong>Forward/Back</strong> slider at slightly different positions
+          (e.g. −0.01, current, +0.01). Print all three at once — small
+          differences in depth can make or break the seal, and testing a few
+          variants costs almost no extra material.
+        </p>
+      </Notice>
+
       <Notice variant="info">
         <h3 className="notice__title">Printing Tips</h3>
         <ul className="notice__list">
-          <li>
-            Print with <strong>TPU (flexible filament)</strong> for a
-            comfortable, conforming fit
-          </li>
-          <li>
-            Recommended layer height: <strong>0.2mm</strong>
-          </li>
-          <li>
-            Infill: <strong>15–20%</strong> — the seal doesn't need to be solid
-          </li>
-          <li>No supports needed for most designs</li>
+          <li>Recommended layer height: <strong>0.2 mm</strong></li>
+          <li>Infill: <strong>15–20%</strong> — the seal doesn't need to be solid</li>
+          <li>TPU: no supports needed — print flat, frame-contact side down</li>
+          <li>PLA: print curved-side down with supports enabled</li>
         </ul>
       </Notice>
 

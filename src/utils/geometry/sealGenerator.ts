@@ -90,6 +90,40 @@ function buildThickBand(
   return geo;
 }
 
+// Flattens both edges of a seal ring together for TPU flat printing.
+//
+// The per-point shift needed to flatten the frame-contact edge is also applied
+// to the face-contact edge, so the depth (frame→face distance) is preserved at
+// every point. When the printed flat frame side is bent back onto the curved
+// glasses frame, the face side moves with it and lands at the original
+// face-conforming position — no extra thickness is introduced at curved areas.
+//
+// Uses min(dot(p, normal)) as the flat plane so all face-contact points remain
+// strictly on the face side (centroid would allow inversions at curved areas).
+export function flattenEdgesForTPU(
+  glassesEdge: THREE.Vector3[],
+  faceEdge: THREE.Vector3[],
+  normal: THREE.Vector3,
+): { flatFrame: THREE.Vector3[]; shiftedFace: THREE.Vector3[] } {
+  let planeD = Infinity;
+  for (const p of glassesEdge) {
+    const d = p.dot(normal);
+    if (d < planeD) planeD = d;
+  }
+
+  const n = Math.min(glassesEdge.length, faceEdge.length);
+  const flatFrame: THREE.Vector3[]   = [];
+  const shiftedFace: THREE.Vector3[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const shift = planeD - glassesEdge[i].dot(normal);
+    flatFrame.push(glassesEdge[i].clone().addScaledVector(normal, shift));
+    shiftedFace.push(faceEdge[i].clone().addScaledVector(normal, shift));
+  }
+
+  return { flatFrame, shiftedFace };
+}
+
 export const SEAL_DEPTH     = 0.05; // fallback flat depth (5 mm at 0.01 scale)
 const WALL_THICKNESS = 0.009;
 

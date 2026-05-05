@@ -310,6 +310,50 @@
   background: var(--color-primary-hover);
 }
 
+/* Alignment tips banner */
+.alignment-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.alignment-tips__item {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.alignment-tips__icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Subtext below a control row (e.g. nose bridge gap) */
+.control__subtext {
+  font-size: 0.775rem;
+  color: #6b7280;
+  margin: 0.2rem 0 0 0;
+  padding-left: 0.25rem;
+  line-height: 1.4;
+}
+
+/* Inline secondary label in a control-group heading */
+.control-group__label-sub {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 @media (max-width: 1024px) {
   .model-preview__container {
     grid-template-columns: 1fr;
