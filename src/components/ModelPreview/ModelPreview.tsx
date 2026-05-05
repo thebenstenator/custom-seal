@@ -243,16 +243,44 @@ function SealGenerator({
 
     function conformedEdge(pts: THREE.Vector3[] | null): THREE.Vector3[] | null {
       if (!pts) return null;
-      return pts.map((p) => {
+      const n = pts.length;
+
+      // Pass 1: raycast every point; record distance to hit, or -1 for miss.
+      const depths: number[] = pts.map((p) => {
         rc.set(p, correctedFaceNormal);
         const hits = rc.intersectObject(head!, false);
-        if (hits.length > 0) {
-          // Sit 1 mm inside the face surface so the seal presses in slightly
-          return hits[0].point.clone().addScaledVector(correctedFaceNormal, 0.001);
-        }
-        // No hit — fall back to flat 5 mm extrusion
-        return p.clone().addScaledVector(correctedFaceNormal, 0.05);
+        return hits.length > 0 ? hits[0].distance : -1;
       });
+
+      // Pass 2: fill misses by interpolating from the nearest successful hits
+      // on each side. This prevents the flat 5 mm fallback from creating a
+      // depth discontinuity (and the resulting flap) at the temple area.
+      for (let i = 0; i < n; i++) {
+        if (depths[i] >= 0) continue;
+        let lo = -1, hi = -1;
+        for (let step = 1; step < n; step++) {
+          if (lo < 0 && depths[(i - step + n) % n] >= 0) lo = (i - step + n) % n;
+          if (hi < 0 && depths[(i + step)     % n] >= 0) hi = (i + step) % n;
+          if (lo >= 0 && hi >= 0) break;
+        }
+        if (lo >= 0 && hi >= 0) {
+          const dLo = (i - lo + n) % n;
+          const dHi = (hi - i  + n) % n;
+          depths[i] = (depths[lo] * dHi + depths[hi] * dLo) / (dLo + dHi);
+        } else if (lo >= 0) {
+          depths[i] = depths[lo];
+        } else if (hi >= 0) {
+          depths[i] = depths[hi];
+        } else {
+          depths[i] = 0.05; // complete miss — no neighbours hit either
+        }
+      }
+
+      // Build the face edge: each point moved to its interpolated face depth
+      // plus 1 mm press-in so the seal sits slightly inside the face surface.
+      return pts.map((p, i) =>
+        p.clone().addScaledVector(correctedFaceNormal, depths[i] + 0.001)
+      );
     }
 
     const leftEdge  = conformedEdge(leftWorld);

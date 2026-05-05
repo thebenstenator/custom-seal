@@ -3,10 +3,6 @@ import * as THREE from "three";
 // three-mesh-bvh augments THREE.BufferGeometry with boundsTree/computeBoundsTree
 // (declared in three-mesh-bvh's own index.d.ts — we don't redeclare it here).
 
-/**
- * Assigns a BVH to the geometry. Kept for future face-scan raycasting.
- * Safe to call multiple times — no-op if already built.
- */
 export function buildFaceBVH(geometry: THREE.BufferGeometry): void {
   if (geometry.boundsTree) return;
   geometry.computeVertexNormals();
@@ -71,8 +67,9 @@ function buildThickBand(
   }
 
   const indices: number[] = [];
-  const isClosedLoop = glassesEdge[0].distanceTo(glassesEdge[n - 1]) < 0.1;
-  const segs = isClosedLoop ? n : n - 1;
+  // A seal band must always be a closed ring. Even when the path's start/end
+  // points are slightly apart (e.g. at a temple arm junction), we close it.
+  const segs = n;
 
   for (let i = 0; i < segs; i++) {
     const j = (i + 1) % n;
@@ -96,13 +93,6 @@ function buildThickBand(
 export const SEAL_DEPTH     = 0.05; // fallback flat depth (5 mm at 0.01 scale)
 const WALL_THICKNESS = 0.009;
 
-/**
- * Builds a seal band.
- * @param worldSealPath - points on the glasses frame at the face-contact surface
- * @param faceNormal    - direction pointing toward the face
- * @param faceEdge      - optional per-point face positions (from head raycasting);
- *                        falls back to a uniform SEAL_DEPTH extrusion when omitted
- */
 export function generateSeal(
   worldSealPath: THREE.Vector3[],
   faceNormal: THREE.Vector3,
