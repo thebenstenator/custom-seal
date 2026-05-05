@@ -7,7 +7,6 @@ import FitType from "./components/FitType/FitType";
 import RequestFrame from "./components/RequestFrame/RequestFrame";
 import ModelPreview from "./components/ModelPreview/ModelPreview";
 import ScanUpload from "./components/ScanUpload/ScanUpload";
-import Confirmation from "./components/Confirmation/Confirmation";
 import { frames } from "./data/frames";
 import "./App.css";
 
@@ -29,7 +28,6 @@ export default function App() {
               <Route path="/request-frame" element={<RequestFrame />} />
               <Route path="/scan" element={<ScanUpload />} />
               <Route path="/preview" element={<ModelPreview />} />
-              <Route path="/confirmation" element={<Confirmation />} />
             </Routes>
           </div>
         </main>

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useFrame } from "@react-three/fiber";
-import { Upload } from "lucide-react";
+import { Upload, Download } from "lucide-react";
 import * as THREE from "three";
+import { STLExporter } from "three/examples/jsm/exporters/STLExporter";
 import {
   useAppStore,
   DEFAULT_GLASSES_POSITION,
@@ -22,6 +23,7 @@ import { generateWorldSealPath } from "../../utils/geometry/parametricSeal";
 import {
   generateSeal,
   generateDualSeal,
+  flattenEdgesForTPU,
 } from "../../utils/geometry/sealGenerator";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
@@ -403,6 +405,21 @@ function SealGenerator({
   return null;
 }
 
+// --- STL export ---
+
+function exportSTL(geo: THREE.BufferGeometry, filename: string) {
+  const exporter = new STLExporter();
+  const mesh = new THREE.Mesh(geo);
+  const result = exporter.parse(mesh, { binary: true });
+  const blob = new Blob([result], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // --- Main component ---
 
 const axisIdx: Record<string, number> = { x: 0, y: 1, z: 2 };
@@ -435,6 +452,7 @@ export default function ModelPreview() {
   const setGeneratedSeal     = useAppStore((s) => s.setGeneratedSeal);
   const setSealRawEdges      = useAppStore((s) => s.setSealRawEdges);
   const generatedSeal        = useAppStore((s) => s.generatedSeal);
+  const sealRawEdges         = useAppStore((s) => s.sealRawEdges);
   const hardpoints           = useAppStore((s) => s.hardpoints);
   const triggerSealGeneration = useAppStore((s) => s.triggerSealGeneration);
 
@@ -455,6 +473,44 @@ export default function ModelPreview() {
   const frameWidthMm = stlBboxWidth !== null
     ? Math.round(stlBboxWidth * glassesScale * 100)
     : null;
+
+  const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
+
+  const handlePLADownload = () => {
+    if (!generatedSeal) return;
+    const geo = generatedSeal.clone();
+    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+    exportSTL(geo, `seal-${slug}-pla.stl`);
+  };
+
+  const handleTPUDownload = () => {
+    if (!generatedSeal) return;
+    let geo: THREE.BufferGeometry;
+    if (sealRawEdges && (sealRawEdges.leftPath || sealRawEdges.rightPath)) {
+      const { leftPath, rightPath, leftFace, rightFace, faceNormal } = sealRawEdges;
+      const { flatFrame: flatLeft, shiftedFace: shiftedLeftFace } =
+        leftPath && leftFace ? flattenEdgesForTPU(leftPath, leftFace, faceNormal) : { flatFrame: null, shiftedFace: null };
+      const { flatFrame: flatRight, shiftedFace: shiftedRightFace } =
+        rightPath && rightFace ? flattenEdgesForTPU(rightPath, rightFace, faceNormal) : { flatFrame: null, shiftedFace: null };
+      const flat = generateDualSeal(flatLeft, flatRight, faceNormal, shiftedLeftFace, shiftedRightFace);
+      if (!flat) return;
+      geo = flat;
+    } else {
+      geo = generatedSeal.clone();
+    }
+    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+    if (sealRawEdges) {
+      const q = new THREE.Quaternion().setFromUnitVectors(
+        sealRawEdges.faceNormal.clone().normalize(),
+        new THREE.Vector3(0, 0, 1),
+      );
+      geo.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));
+    }
+    geo.computeBoundingBox();
+    const minZ = geo.boundingBox?.min.z ?? 0;
+    if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
+    exportSTL(geo, `seal-${slug}-tpu-flat.stl`);
+  };
 
   const handleGlassesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -824,13 +880,20 @@ export default function ModelPreview() {
           <button onClick={triggerSealGeneration} className="controls__generate">
             Generate Seal Preview
           </button>
-        </div>
-      </div>
 
-      <div className="model-preview__actions">
-        <Button variant="primary" onClick={() => navigate("/confirmation")}>
-          Continue
-        </Button>
+          {generatedSeal && (
+            <div className="controls__downloads">
+              <button className="controls__download-btn controls__download-btn--pla" onClick={handlePLADownload}>
+                <Download size={15} />
+                Download PLA
+              </button>
+              <button className="controls__download-btn controls__download-btn--tpu" onClick={handleTPUDownload}>
+                <Download size={15} />
+                Download TPU (Flat)
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
