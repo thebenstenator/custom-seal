@@ -476,6 +476,35 @@ export default function ModelPreview() {
 
   const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
 
+  const handleAutoOrient = () => {
+    const head = headMeshRef.current;
+    if (!head) return;
+
+    head.updateMatrixWorld(true);
+
+    const headBox = new THREE.Box3().setFromObject(head);
+
+    // Eye level at ~65% of head bbox height
+    const eyeY = headBox.min.y + (headBox.max.y - headBox.min.y) * 0.65;
+
+    // Assume face points toward world +Z (set by the orientation wizard).
+    // Cast a ray in from in front to find the face surface depth.
+    if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
+    const rc = new THREE.Raycaster();
+    rc.near = 0;
+    rc.far = 30;
+    rc.set(new THREE.Vector3(0, eyeY, 15), new THREE.Vector3(0, 0, -1));
+    const hits = rc.intersectObject(head, false);
+
+    const faceZ = hits.length > 0 ? hits[0].point.z : headBox.max.z;
+    const faceY = hits.length > 0 ? hits[0].point.y : eyeY;
+
+    // Group rotation Y(π/2): world(x,y,z) → group-local(-z, y, x).
+    // Place glasses 5 mm in front of (above) the face surface.
+    setGlassesPosition([-(faceZ + 0.05), faceY, 0]);
+    setGlassesRotation([...DEFAULT_GLASSES_ROTATION] as [number, number, number]);
+  };
+
   const handlePLADownload = () => {
     if (!generatedSeal) return;
     const geo = generatedSeal.clone();
@@ -693,6 +722,12 @@ export default function ModelPreview() {
               </label>
             )}
           </div>
+
+          {glassesFile && (
+            <button className="controls__auto-orient" onClick={handleAutoOrient}>
+              ⊕ Auto-Orient Glasses
+            </button>
+          )}
 
           <div className="control-group">
             <h4 className="control-group__label">Head Orientation</h4>

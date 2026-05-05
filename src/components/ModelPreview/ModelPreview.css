@@ -292,6 +292,24 @@
   color: var(--color-primary);
 }
 
+.controls__auto-orient {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px dashed #6366f1;
+  border-radius: var(--radius-md);
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.controls__auto-orient:hover {
+  background: #e0e7ff;
+  border-style: solid;
+}
+
 .controls__generate {
   width: 100%;
   margin-top: 0.75rem;
