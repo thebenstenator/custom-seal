@@ -47,7 +47,7 @@ function HeadModel({ scanFile, rotation, meshRef, onLoadError }: HeadModelProps)
     <mesh
       ref={meshRef}
       geometry={geometry}
-      rotation={[-Math.PI / 2, rotation[1], rotation[2]]}
+      rotation={[rotation[0], rotation[1], rotation[2]]}
       scale={0.01}
     >
       <meshStandardMaterial color="#f4a582" />

@@ -1,16 +1,66 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { Upload, CheckCircle, ExternalLink } from "lucide-react";
-import { useAppStore } from "../../store/useAppStore";
+import * as THREE from "three";
+import { useAppStore, DEFAULT_HEAD_ROTATION } from "../../store/useAppStore";
+import { useUploadedModel } from "../../hooks/useSTLModel";
+import SceneCanvas from "../shared/SceneCanvas";
 import Button from "../shared/Button";
 import "./ScanUpload.css";
 
+// Rotation buttons: label, world-axis unit vector, angle (radians)
+const ORIENT_BUTTONS = [
+  { label: "↻ Spin Left",  axis: new THREE.Vector3(0, 1, 0),  angle:  Math.PI / 2 },
+  { label: "↺ Spin Right", axis: new THREE.Vector3(0, 1, 0),  angle: -Math.PI / 2 },
+  { label: "↑ Tilt Up",    axis: new THREE.Vector3(1, 0, 0),  angle: -Math.PI / 2 },
+  { label: "↓ Tilt Down",  axis: new THREE.Vector3(1, 0, 0),  angle:  Math.PI / 2 },
+  { label: "↰ Roll CW",    axis: new THREE.Vector3(0, 0, 1),  angle: -Math.PI / 2 },
+  { label: "↱ Roll CCW",   axis: new THREE.Vector3(0, 0, 1),  angle:  Math.PI / 2 },
+];
+
+function WizardHeadMesh({
+  geometry,
+  euler,
+}: {
+  geometry: THREE.BufferGeometry;
+  euler: [number, number, number];
+}) {
+  return (
+    <mesh geometry={geometry} rotation={euler} scale={0.01}>
+      <meshStandardMaterial color="#f4a582" side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
 export default function ScanUpload() {
-  const navigate      = useNavigate();
-  const selectedFrame = useAppStore((s) => s.selectedFrame);
-  const userScan      = useAppStore((s) => s.userScan);
-  const setUserScan   = useAppStore((s) => s.setUserScan);
-  const inputRef      = useRef<HTMLInputElement>(null);
+  const navigate       = useNavigate();
+  const selectedFrame  = useAppStore((s) => s.selectedFrame);
+  const userScan       = useAppStore((s) => s.userScan);
+  const setUserScan    = useAppStore((s) => s.setUserScan);
+  const headRotation   = useAppStore((s) => s.headRotation);
+  const setHeadRotation = useAppStore((s) => s.setHeadRotation);
+  const inputRef       = useRef<HTMLInputElement>(null);
+
+  // Geometry for the orientation wizard preview
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const geometry = useUploadedModel(userScan, setLoadError);
+
+  // Accumulated rotation as a quaternion (ref) + euler state for the mesh + display
+  const wizQuatRef = useRef(
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(...headRotation))
+  );
+  const [wizEuler, setWizEuler] = useState<[number, number, number]>(
+    () => [...headRotation] as [number, number, number]
+  );
+
+  // When a new file is uploaded, reset wizard to the default orientation
+  useEffect(() => {
+    if (userScan) {
+      wizQuatRef.current.setFromEuler(new THREE.Euler(...DEFAULT_HEAD_ROTATION));
+      setWizEuler([...DEFAULT_HEAD_ROTATION] as [number, number, number]);
+      setLoadError(null);
+    }
+  }, [userScan?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
@@ -24,6 +74,21 @@ export default function ScanUpload() {
     }
     setUserScan(file);
   };
+
+  const applyRotation = (axis: THREE.Vector3, angle: number) => {
+    const delta = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+    // Pre-multiply = rotate around world axes (not local)
+    wizQuatRef.current.premultiply(delta);
+    const e = new THREE.Euler().setFromQuaternion(wizQuatRef.current);
+    setWizEuler([e.x, e.y, e.z]);
+  };
+
+  const handleConfirm = () => {
+    setHeadRotation(wizEuler);
+    navigate("/preview");
+  };
+
+  const showWizard = Boolean(userScan);
 
   return (
     <div className="scan-upload">
@@ -101,7 +166,9 @@ export default function ScanUpload() {
         </div>
 
         <div className="scan-upload__form">
-          <h3 className="scan-upload__form-title">Upload Your Face Scan</h3>
+          <h3 className="scan-upload__form-title">
+            {showWizard ? "Step 1: Upload" : "Upload Your Face Scan"}
+          </h3>
 
           {userScan ? (
             <div className="upload-success">
@@ -141,12 +208,47 @@ export default function ScanUpload() {
             </label>
           )}
 
+          {showWizard && (
+            <div className="orient-wizard">
+              <h3 className="orient-wizard__title">Step 2: Orient Your Scan</h3>
+              <p className="orient-wizard__hint">
+                Rotate until your face points <strong>toward you</strong> (toward the camera).
+              </p>
+
+              <div className="orient-wizard__viewer">
+                {loadError ? (
+                  <div className="orient-wizard__error">{loadError}</div>
+                ) : !geometry ? (
+                  <div className="orient-wizard__loading">Loading scan…</div>
+                ) : (
+                  <SceneCanvas cameraPosition={[0, 0, 2.5]}>
+                    <WizardHeadMesh geometry={geometry} euler={wizEuler} />
+                  </SceneCanvas>
+                )}
+              </div>
+
+              <div className="orient-wizard__buttons">
+                {ORIENT_BUTTONS.map(({ label, axis, angle }) => (
+                  <button
+                    key={label}
+                    className="orient-wizard__btn"
+                    onClick={() => applyRotation(axis, angle)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Button
             variant="primary"
             fullWidth
-            onClick={() => navigate("/preview")}
+            onClick={showWizard ? handleConfirm : () => navigate("/preview")}
           >
-            {userScan ? "Continue to Alignment →" : "Skip — Use Demo Head"}
+            {showWizard
+              ? "Confirm & Continue to Alignment →"
+              : "Skip — Use Demo Head"}
           </Button>
         </div>
       </div>
