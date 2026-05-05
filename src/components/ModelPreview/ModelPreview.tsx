@@ -24,6 +24,7 @@ import {
   generateDualSeal,
 } from "../../utils/geometry/sealGenerator";
 import Button from "../shared/Button";
+import Notice from "../shared/Notice";
 import "./ModelPreview.css";
 
 // --- Scene sub-components ---
@@ -32,10 +33,11 @@ interface HeadModelProps {
   scanFile: File | null;
   rotation: [number, number, number];
   meshRef: React.RefObject<THREE.Mesh | null>;
+  onLoadError?: (msg: string) => void;
 }
 
-function HeadModel({ scanFile, rotation, meshRef }: HeadModelProps) {
-  const uploaded = useUploadedModel(scanFile);
+function HeadModel({ scanFile, rotation, meshRef, onLoadError }: HeadModelProps) {
+  const uploaded = useUploadedModel(scanFile, onLoadError);
   const defaultGeo = useSTLModel("/models/default-head.stl");
   const geometry = scanFile ? uploaded : defaultGeo;
   if (!geometry) return null;
@@ -58,6 +60,7 @@ interface GlassesModelProps {
   scale: number;
   meshRef: React.RefObject<THREE.Mesh | null>;
   onBboxWidth: (widthInStlUnits: number) => void;
+  onLoadError?: (msg: string) => void;
 }
 
 function GlassesModel({
@@ -67,8 +70,9 @@ function GlassesModel({
   scale,
   meshRef,
   onBboxWidth,
+  onLoadError,
 }: GlassesModelProps) {
-  const uploaded = useUploadedModel(glassesFile);
+  const uploaded = useUploadedModel(glassesFile, onLoadError);
   const defaultGeo = useSTLModel("/models/default-glasses.stl");
   const geometry = glassesFile ? uploaded : defaultGeo;
 
@@ -391,6 +395,8 @@ function SealGenerator({
       faceNormal: correctedFaceNormal,
     };
 
+    if (alignMat) sliceGeo.dispose();
+
     onSealGenerated({ worldHardpoints, sealGeometry, rawEdges });
   });
 
@@ -438,6 +444,7 @@ export default function ModelPreview() {
   const [fineCenters, setFineCenters]       = useState<FineCenters | null>(null);
   const [stlBboxWidth, setStlBboxWidth]     = useState<number | null>(null);
   const [bridgeDistMm, setBridgeDistMm]     = useState<number | null>(null);
+  const [loadError, setLoadError]           = useState<string | null>(null);
 
   const glassesMeshRef = useRef<THREE.Mesh>(null);
   const headMeshRef    = useRef<THREE.Mesh>(null);
@@ -457,6 +464,7 @@ export default function ModelPreview() {
       alert("Please upload an STL, GLB, GLTF, OBJ, or PLY file.");
       return;
     }
+    setLoadError(null);
     setGlassesFile(file);
     resetAlignment();
   };
@@ -560,6 +568,7 @@ export default function ModelPreview() {
                 scanFile={userScan}
                 rotation={headRotation}
                 meshRef={headMeshRef}
+                onLoadError={setLoadError}
               />
               <GlassesModel
                 glassesFile={glassesFile}
@@ -568,6 +577,7 @@ export default function ModelPreview() {
                 scale={glassesScale}
                 meshRef={glassesMeshRef}
                 onBboxWidth={setStlBboxWidth}
+                onLoadError={setLoadError}
               />
             </group>
 
@@ -578,6 +588,7 @@ export default function ModelPreview() {
               glassesMeshRef={glassesMeshRef}
               headMeshRef={headMeshRef}
               onSealGenerated={({ worldHardpoints, sealGeometry, rawEdges }) => {
+                useAppStore.getState().generatedSeal?.dispose();
                 setHardpoints(worldHardpoints);
                 setGeneratedSeal(sealGeometry);
                 setSealRawEdges(rawEdges);
@@ -596,6 +607,12 @@ export default function ModelPreview() {
 
         <div className="model-preview__controls">
           <h3 className="controls__title">Adjust Alignment</h3>
+
+          {loadError && (
+            <Notice variant="warning">
+              <p className="notice__text">Failed to load model: {loadError}</p>
+            </Notice>
+          )}
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Model</h4>

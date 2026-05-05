@@ -96,7 +96,7 @@ export default function Confirmation() {
 
     // Shift so minimum Z = 0 (flat side sits on print bed).
     geo.computeBoundingBox();
-    const minZ = geo.boundingBox!.min.z;
+    const minZ = geo.boundingBox?.min.z ?? 0;
     if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
 
     exportSTL(geo, `seal-${slug}-tpu-flat.stl`);

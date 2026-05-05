@@ -83,19 +83,11 @@ export function extractPerEyePaths(
   const sorted = [...loops].sort((a, b) => bboxArea(b) - bboxArea(a));
   const maxArea = bboxArea(sorted[0]);
 
-  console.log(
-    "[Tier2 loops]",
-    sorted.map((l, i) =>
-      `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
-    ).join(" | ")
-  );
-
   const inner = sorted.filter((l) => bboxArea(l) < maxArea * 0.5 && bboxArea(l) > 100);
 
   if (inner.length > 0) {
     const leftLoops  = inner.filter((l) => centroidX(l) < 0);
     const rightLoops = inner.filter((l) => centroidX(l) >= 0);
-    console.log("[Tier2 split] inner found:", inner.length, "→ left:", leftLoops.length, "right:", rightLoops.length);
     return {
       leftPath:  leftLoops.length  > 0 ? extractSilhouettePath(leftLoops,  numAngles) : null,
       rightPath: rightLoops.length > 0 ? extractSilhouettePath(rightLoops, numAngles) : null,
@@ -110,7 +102,6 @@ export function extractPerEyePaths(
     const allPts   = valid.flat();
     const leftPts  = allPts.filter((p) => p.x < 0);
     const rightPts = allPts.filter((p) => p.x >= 0);
-    console.log("[Tier2 split] inner: 0 → point-split left:", leftPts.length, "right:", rightPts.length);
     return {
       leftPath:  leftPts.length  > 5 ? extractSilhouettePath([leftPts],  numAngles) : null,
       rightPath: rightPts.length > 5 ? extractSilhouettePath([rightPts], numAngles) : null,
@@ -120,7 +111,6 @@ export function extractPerEyePaths(
   const pickBest = (ls: THREE.Vector3[][]): THREE.Vector3[] =>
     downsample([...ls].sort((a, b) => bboxArea(b) - bboxArea(a))[0], 100);
 
-  console.log("[Tier2 split] inner: 0 → direct loops: left:", leftLoops.length, "right:", rightLoops.length);
   return {
     leftPath:  leftLoops.length  > 0 ? pickBest(leftLoops)  : null,
     rightPath: rightLoops.length > 0 ? pickBest(rightLoops) : null,
@@ -311,7 +301,6 @@ export function findOpenBoundaryLoops(
   }
 
   if (segs.length === 0) return [];
-  console.log("[boundary] boundary edge segments:", segs.length);
   return connectSegments(segs, epsilon);
 }
 
@@ -343,7 +332,6 @@ export function extractFaceContactLoops(
 
   const edgeUse = new Map<string, number>();
   const edgeEnds = new Map<string, [number, number]>();
-  let fcCount = 0;
 
   for (let t = 0; t < n; t += 3) {
     const ai = vidx[t], bi = vidx[t + 1], ci = vidx[t + 2];
@@ -359,7 +347,6 @@ export function extractFaceContactLoops(
     nx /= nLen; ny /= nLen; nz /= nLen;
 
     if (nx * cn.x + ny * cn.y + nz * cn.z <= threshold) continue;
-    fcCount++;
 
     for (const [v0i, v1i] of [[ai, bi], [bi, ci], [ci, ai]] as [number, number][]) {
       const lo = Math.min(v0i, v1i), hi = Math.max(v0i, v1i);
@@ -377,7 +364,6 @@ export function extractFaceContactLoops(
     }
   }
 
-  console.log("[faceContact] face-contact tris:", fcCount, "/ boundary segs:", segs.length);
   if (segs.length === 0) return [];
   return connectSegments(segs, epsilon);
 }
@@ -397,12 +383,6 @@ export function extractPerEyeAggregate(
     const fcLoops = extractFaceContactLoops(geometry, cnAligned, 0.25, epsilon);
     if (fcLoops.length >= 2) {
       const sorted = [...fcLoops].sort((a, b) => bboxArea(b) - bboxArea(a));
-      console.log(
-        "[aggregate S0] face-contact loops:",
-        sorted.map((l, i) =>
-          `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
-        ).join(" | ")
-      );
 
       const maxArea = bboxArea(sorted[0]);
       const candidates = sorted.filter(l => l.length >= 4 && bboxArea(l) > 20);
@@ -418,7 +398,6 @@ export function extractPerEyeAggregate(
           const raw = [...ls].sort((a, b) => bboxArea(b) - bboxArea(a))[0];
           return downsample(expandLoopOutward(raw, SEAL_OUTSET_MM), 120);
         };
-        console.log("[aggregate S0] left pts:", leftLoops[0].length, "right pts:", rightLoops[0].length);
         return {
           leftPath:  pickBest(leftLoops),
           rightPath: pickBest(rightLoops),
@@ -432,12 +411,6 @@ export function extractPerEyeAggregate(
   const boundaryLoops = findOpenBoundaryLoops(geometry, epsilon);
   if (boundaryLoops.length > 0) {
     const sorted = [...boundaryLoops].sort((a, b) => bboxArea(b) - bboxArea(a));
-    console.log(
-      "[aggregate] boundary loops:",
-      sorted.map((l, i) =>
-        `#${i} pts=${l.length} area=${bboxArea(l).toFixed(0)} cx=${centroidX(l).toFixed(1)}`
-      ).join(" | ")
-    );
 
     const candidates = sorted.filter(l => bboxArea(l) > 50);
     const leftLoops  = candidates.filter(l => centroidX(l) < -1);
@@ -450,7 +423,6 @@ export function extractPerEyeAggregate(
         [...ls].sort((a, b) => sign * (centroidX(b) - centroidX(a)))[0];
       const leftBest  = pickEye(leftLoops,  -1);
       const rightBest = pickEye(rightLoops,  1);
-      console.log("[aggregate] boundary path: left pts:", leftBest.length, "right pts:", rightBest.length);
       return {
         leftPath:  downsample(leftBest.map(p  => new THREE.Vector3(p.x, p.y, sealZ)), 120),
         rightPath: downsample(rightBest.map(p => new THREE.Vector3(p.x, p.y, sealZ)), 120),
@@ -485,8 +457,6 @@ export function extractPerEyeAggregate(
   });
   const lc = mean2d(leftRim);
   const rc = mean2d(rightRim);
-  console.log("[aggregate] lens centers L(", lc.x.toFixed(1), lc.y.toFixed(1),
-    ") R(", rc.x.toFixed(1), rc.y.toFixed(1), ")");
 
   geometry.computeVertexNormals();
   const pos = geometry.attributes.position;
@@ -509,8 +479,6 @@ export function extractPerEyeAggregate(
     }
   }
 
-  console.log("[aggregate] inner-wall verts: left:", leftWall.length, "right:", rightWall.length);
-
   if (leftWall.length > 10 && rightWall.length > 10) {
     return {
       leftPath:  extractSilhouettePath([leftWall],  numAngles),
@@ -518,7 +486,6 @@ export function extractPerEyeAggregate(
     };
   }
 
-  console.log("[aggregate] falling back to outer silhouette from rim loops");
   return {
     leftPath:  extractSilhouettePath([leftRim],  numAngles),
     rightPath: extractSilhouettePath([rightRim], numAngles),
@@ -550,10 +517,6 @@ export function extractSealPath(loops: THREE.Vector3[][]): THREE.Vector3[] | nul
   if (!loops || loops.length === 0) return null;
 
   const sorted = [...loops].sort((a, b) => bboxArea(b) - bboxArea(a));
-  sorted.forEach((l, i) => {
-    const xs = l.map(p => p.x), ys = l.map(p => p.y);
-    console.log(`[loop ${i}] pts:${l.length} area:${bboxArea(l).toFixed(0)} x:[${Math.min(...xs).toFixed(1)},${Math.max(...xs).toFixed(1)}] y:[${Math.min(...ys).toFixed(1)},${Math.max(...ys).toFixed(1)}]`);
-  });
 
   const outer = sorted[0];
   const inner = sorted.slice(1).filter((l) => l.length >= 3);

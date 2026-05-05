@@ -11,7 +11,13 @@ export default function FitType() {
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
-  const hasGenericSeal = Boolean(selectedFrame.genericSealUrl);
+  const rawSealUrl = selectedFrame.genericSealUrl;
+  const genericSealUrl =
+    rawSealUrl &&
+    (rawSealUrl.startsWith("/") || /^https?:\/\//.test(rawSealUrl))
+      ? rawSealUrl
+      : null;
+  const hasGenericSeal = Boolean(genericSealUrl);
 
   function chooseCustom() {
     setFitType("custom");
@@ -69,7 +75,7 @@ export default function FitType() {
               <li>Ready to print immediately</li>
             </ul>
             <a
-              href={selectedFrame.genericSealUrl!}
+              href={genericSealUrl!}
               download={`seal-${selectedFrame.id}-standard.stl`}
               className="fit-card__download"
               onClick={() => setFitType("standard")}

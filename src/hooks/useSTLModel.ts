@@ -30,10 +30,15 @@ function mergeSceneGeometries(object: THREE.Object3D): THREE.BufferGeometry | nu
     geos.push(g);
   });
   if (geos.length === 0) return null;
-  const merged: THREE.BufferGeometry =
-    geos.length === 1
-      ? geos[0]
-      : BufferGeometryUtils.mergeGeometries(geos, false);
+
+  let merged: THREE.BufferGeometry;
+  if (geos.length === 1) {
+    merged = geos[0];
+  } else {
+    merged = BufferGeometryUtils.mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+  }
+
   merged.center();
   merged.computeBoundingBox();
 
@@ -44,6 +49,8 @@ function mergeSceneGeometries(object: THREE.Object3D): THREE.BufferGeometry | nu
     bb.max.z - bb.min.z,
   );
   if (maxDim > 0) {
+    // Normalize to ~130 mm longest axis so all uploads display at a consistent
+    // viewport scale regardless of source units (mm, cm, m).
     const s = 130 / maxDim;
     merged.scale(s, s, s);
     merged.computeBoundingBox();
@@ -68,30 +75,44 @@ function mergeSceneGeometries(object: THREE.Object3D): THREE.BufferGeometry | nu
   return merged;
 }
 
-export function useUploadedModel(file: File | null): THREE.BufferGeometry | null {
+export function useUploadedModel(
+  file: File | null,
+  onLoadError?: (message: string) => void,
+): THREE.BufferGeometry | null {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
 
   useEffect(() => {
-    if (!file) { setGeometry(null); return; }
+    if (!file) { setGeometry(prev => { prev?.dispose(); return null; }); return; }
+
+    let cancelled = false;
     const url = URL.createObjectURL(file);
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+    const set = (geo: THREE.BufferGeometry) => {
+      if (cancelled) { geo.dispose(); return; }
+      setGeometry(prev => { prev?.dispose(); return geo; });
+    };
 
     const finish = (geo: THREE.BufferGeometry) => {
       geo.center();
       geo.computeBoundingBox();
       geo.computeVertexNormals();
-      setGeometry(geo);
+      set(geo);
     };
 
-    const onError = (err: unknown) =>
+    const onError = (err: unknown) => {
+      if (cancelled) return;
       console.error("[useUploadedModel] Failed to load:", err);
+      const msg = err instanceof Error ? err.message : "Failed to load model file.";
+      onLoadError?.(msg);
+    };
 
     if (ext === "glb" || ext === "gltf") {
       new GLTFLoader().load(
         url,
         (gltf: GLTF) => {
           const geo = mergeSceneGeometries(gltf.scene);
-          if (geo) setGeometry(geo);
+          if (geo) set(geo);
           else onError(new Error("No mesh geometry found in GLTF scene"));
         },
         undefined,
@@ -102,7 +123,7 @@ export function useUploadedModel(file: File | null): THREE.BufferGeometry | null
         url,
         (group: THREE.Group) => {
           const geo = mergeSceneGeometries(group);
-          if (geo) setGeometry(geo);
+          if (geo) set(geo);
           else onError(new Error("No mesh geometry found in OBJ"));
         },
         undefined,
@@ -114,8 +135,11 @@ export function useUploadedModel(file: File | null): THREE.BufferGeometry | null
       new STLLoader().load(url, finish, undefined, onError);
     }
 
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(url);
+    };
+  }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return geometry;
 }
