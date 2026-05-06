@@ -1,7 +1,7 @@
 import { Component, Suspense } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, GizmoHelper, GizmoViewport } from "@react-three/drei";
 
 interface ErrorBoundaryState { hasError: boolean }
 
@@ -39,11 +39,16 @@ class CanvasErrorBoundary extends Component<{ children: ReactNode }, ErrorBounda
 interface SceneCanvasProps {
   cameraPosition?: [number, number, number];
   children?: ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  controlsRef?: RefObject<any>;
+  showGizmo?: boolean;
 }
 
 export default function SceneCanvas({
   cameraPosition = [0, 0, 4.5],
   children,
+  controlsRef,
+  showGizmo = false,
 }: SceneCanvasProps) {
   return (
     <CanvasErrorBoundary>
@@ -53,7 +58,15 @@ export default function SceneCanvas({
           <directionalLight position={[10, 10, 5]} intensity={1} />
           <directionalLight position={[-10, -10, -5]} intensity={0.3} />
           {children}
-          <OrbitControls enableZoom={true} enablePan={true} />
+          <OrbitControls ref={controlsRef} enableZoom={true} enablePan={true} />
+          {showGizmo && (
+            <GizmoHelper alignment="bottom-right" margin={[70, 70]}>
+              <GizmoViewport
+                axisColors={["#ef4444", "#22c55e", "#3b82f6"]}
+                labelColor="white"
+              />
+            </GizmoHelper>
+          )}
         </Suspense>
       </Canvas>
     </CanvasErrorBoundary>

@@ -208,11 +208,13 @@ interface SealGeneratorProps {
   glassesMeshRef: React.RefObject<THREE.Mesh | null>;
   headMeshRef: React.RefObject<THREE.Mesh | null>;
   onSealGenerated: (result: SealGeneratorResult) => void;
+  symmetrize: boolean;
 }
 
 function SealGenerator({
   glassesMeshRef,
   headMeshRef,
+  symmetrize,
   onSealGenerated,
 }: SealGeneratorProps) {
   const sealTrigger = useAppStore((s) => s.sealTrigger);
@@ -314,16 +316,14 @@ function SealGenerator({
     rc.near = 0.002;
     rc.far  = 0.5;
 
-    function conformedEdge(pts: THREE.Vector3[] | null): THREE.Vector3[] | null {
-      if (!pts) return null;
+    // Raycast from each frame-edge point toward the face; interpolate misses.
+    function getDepths(pts: THREE.Vector3[]): number[] {
       const n = pts.length;
-
       const depths: number[] = pts.map((p) => {
         rc.set(p, correctedFaceNormal);
         const hits = rc.intersectObject(head!, false);
         return hits.length > 0 ? hits[0].distance : -1;
       });
-
       for (let i = 0; i < n; i++) {
         if (depths[i] >= 0) continue;
         let lo = -1, hi = -1;
@@ -332,26 +332,33 @@ function SealGenerator({
           if (hi < 0 && depths[(i + step)     % n] >= 0) hi = (i + step) % n;
           if (lo >= 0 && hi >= 0) break;
         }
-        if (lo >= 0 && hi >= 0) {
-          const dLo = (i - lo + n) % n;
-          const dHi = (hi - i  + n) % n;
-          depths[i] = (depths[lo] * dHi + depths[hi] * dLo) / (dLo + dHi);
-        } else if (lo >= 0) {
-          depths[i] = depths[lo];
-        } else if (hi >= 0) {
-          depths[i] = depths[hi];
-        } else {
-          depths[i] = 0.05;
-        }
+        if      (lo >= 0 && hi >= 0) { const dLo = (i - lo + n) % n, dHi = (hi - i + n) % n; depths[i] = (depths[lo] * dHi + depths[hi] * dLo) / (dLo + dHi); }
+        else if (lo >= 0)             depths[i] = depths[lo];
+        else if (hi >= 0)             depths[i] = depths[hi];
+        else                          depths[i] = 0.05;
       }
-
-      return pts.map((p, i) =>
-        p.clone().addScaledVector(correctedFaceNormal, depths[i] + 0.001)
-      );
+      return depths;
     }
 
-    const leftEdge  = conformedEdge(leftWorld);
-    const rightEdge = conformedEdge(rightWorld);
+    function buildEdge(pts: THREE.Vector3[], depths: number[]): THREE.Vector3[] {
+      return pts.map((p, i) => p.clone().addScaledVector(correctedFaceNormal, depths[i] + 0.001));
+    }
+
+    const leftDepths  = leftWorld  ? getDepths(leftWorld)  : null;
+    const rightDepths = rightWorld ? getDepths(rightWorld) : null;
+
+    if (symmetrize && leftDepths && rightDepths) {
+      // Equalize the mean depth between the two sides so a tilted frame or
+      // slightly asymmetric scan doesn't produce wildly different seal heights.
+      const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+      const lm = mean(leftDepths), rm = mean(rightDepths);
+      const target = (lm + rm) / 2;
+      for (let i = 0; i < leftDepths.length;  i++) leftDepths[i]  += target - lm;
+      for (let i = 0; i < rightDepths.length; i++) rightDepths[i] += target - rm;
+    }
+
+    const leftEdge  = leftWorld  && leftDepths  ? buildEdge(leftWorld,  leftDepths)  : null;
+    const rightEdge = rightWorld && rightDepths ? buildEdge(rightWorld, rightDepths) : null;
 
     let sealGeometry = eyePaths
       ? generateDualSeal(leftWorld, rightWorld, sealNormal, leftEdge, rightEdge)
@@ -465,9 +472,12 @@ export default function ModelPreview() {
   const [stlBboxWidth, setStlBboxWidth]     = useState<number | null>(null);
   const [bridgeDistMm, setBridgeDistMm]     = useState<number | null>(null);
   const [loadError, setLoadError]           = useState<string | null>(null);
+  const [symmetrize, setSymmetrize]         = useState(false);
 
   const glassesMeshRef = useRef<THREE.Mesh>(null);
   const headMeshRef    = useRef<THREE.Mesh>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const orbitRef       = useRef<any>(null);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
@@ -477,6 +487,14 @@ export default function ModelPreview() {
     : null;
 
   const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
+
+  const snapView = (pos: [number, number, number]) => {
+    const ctrl = orbitRef.current;
+    if (!ctrl) return;
+    ctrl.object.position.set(...pos);
+    ctrl.target.set(0, 0.3, 0);
+    ctrl.update();
+  };
 
   const handleAutoOrient = () => {
     const head    = headMeshRef.current;
@@ -701,7 +719,21 @@ export default function ModelPreview() {
 
       <div className="model-preview__container">
         <div className="model-preview__viewer">
-          <SceneCanvas cameraPosition={[0, 0, 7.5]}>
+          <div className="view-snap">
+            {([
+              ["F",  [0,   0.3,  7.5]],
+              ["B",  [0,   0.3, -7.5]],
+              ["L",  [-7.5, 0.3, 0  ]],
+              ["R",  [7.5,  0.3, 0  ]],
+              ["T",  [0,   7.5,  0  ]],
+            ] as [string, [number,number,number]][]).map(([label, pos]) => (
+              <button key={label} className="view-snap__btn" onClick={() => snapView(pos)} title={
+                label === "F" ? "Front" : label === "B" ? "Back" :
+                label === "L" ? "Left"  : label === "R" ? "Right" : "Top"
+              }>{label}</button>
+            ))}
+          </div>
+          <SceneCanvas cameraPosition={[0, 0, 7.5]} controlsRef={orbitRef} showGizmo>
             <group rotation={[0, Math.PI / 2, 0]}>
               <HeadModel
                 scanFile={userScan}
@@ -726,6 +758,7 @@ export default function ModelPreview() {
             <SealGenerator
               glassesMeshRef={glassesMeshRef}
               headMeshRef={headMeshRef}
+              symmetrize={symmetrize}
               onSealGenerated={({ worldHardpoints, sealGeometry, rawEdges }) => {
                 useAppStore.getState().generatedSeal?.dispose();
                 setHardpoints(worldHardpoints);
@@ -966,9 +999,18 @@ export default function ModelPreview() {
             </button>
           </div>
 
-          <button onClick={triggerSealGeneration} className="controls__generate">
-            Generate Seal Preview
-          </button>
+          <div className="controls__seal-row">
+            <button onClick={triggerSealGeneration} className="controls__generate">
+              Generate Seal Preview
+            </button>
+            <button
+              onClick={() => setSymmetrize((v) => !v)}
+              className={`controls__toggle ${symmetrize ? "controls__toggle--active" : ""}`}
+              title="Equalize left/right seal depth to compensate for slight frame tilt or scan asymmetry"
+            >
+              Symmetrize
+            </button>
+          </div>
 
           {generatedSeal && (
             <div className="controls__downloads">
