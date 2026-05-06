@@ -484,26 +484,44 @@ export default function ModelPreview() {
     if (!head) return;
 
     head.updateMatrixWorld(true);
+    if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
 
     // ── Position ────────────────────────────────────────────────────────────
-    const headBox = new THREE.Box3().setFromObject(head);
-    const eyeY    = headBox.min.y + (headBox.max.y - headBox.min.y) * 0.65;
+    const headBox    = new THREE.Box3().setFromObject(head);
+    const headCenterX = (headBox.min.x + headBox.max.x) / 2;
+    const headHeight  = headBox.max.y - headBox.min.y;
 
-    // Face is assumed to point toward world +Z after the orientation wizard.
-    // Raycast from in front to find the face-surface depth.
-    if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
     const rc = new THREE.Raycaster();
     rc.near = 0;
     rc.far  = 30;
-    rc.set(new THREE.Vector3(0, eyeY, 15), new THREE.Vector3(0, 0, -1));
-    const hits = rc.intersectObject(head, false);
 
-    const faceZ = hits.length > 0 ? hits[0].point.z : headBox.max.z;
-    const faceY = hits.length > 0 ? hits[0].point.y : eyeY;
+    // Sweep 14 rays from 48% to 76% of head height to find the nose tip —
+    // the most-forward (highest world-Z) point on the face centre-line.
+    let noseZ = -Infinity;
+    let noseY = headBox.min.y + headHeight * 0.65; // fallback
+    for (let i = 0; i < 14; i++) {
+      const t       = 0.48 + (i / 13) * 0.28;
+      const sampleY = headBox.min.y + headHeight * t;
+      rc.set(new THREE.Vector3(headCenterX, sampleY, 15), new THREE.Vector3(0, 0, -1));
+      const hits = rc.intersectObject(head, false);
+      if (hits.length > 0 && hits[0].point.z > noseZ) {
+        noseZ = hits[0].point.z;
+        noseY = sampleY;
+      }
+    }
+    if (!isFinite(noseZ)) noseZ = headBox.max.z;
 
-    // Group rotation Y(π/2): world → group-local gives localX = −worldZ.
-    // Place glasses 5 mm in front of the face surface.
-    setGlassesPosition([-(faceZ + 0.05), faceY, 0]);
+    // The glasses bridge sits above the nose tip. Step up ~5% of head height
+    // to move from the tip to the nose bridge, then re-sample surface depth.
+    const bridgeY    = noseY + headHeight * 0.05;
+    rc.set(new THREE.Vector3(headCenterX, bridgeY, 15), new THREE.Vector3(0, 0, -1));
+    const bridgeHits = rc.intersectObject(head, false);
+    const bridgeZ    = bridgeHits.length > 0 ? bridgeHits[0].point.z : noseZ;
+
+    // Convert world (headCenterX, bridgeY, bridgeZ + 5mm) → group-local.
+    // Ry(PI/2) group: worldX = localZ, worldZ = -localX.
+    // Place glasses 5 mm in front of the nose bridge surface.
+    setGlassesPosition([-(bridgeZ + 0.05), bridgeY, headCenterX]);
 
     // ── Rotation ────────────────────────────────────────────────────────────
     // Start from the default orientation (glasses depth axis → toward head).
