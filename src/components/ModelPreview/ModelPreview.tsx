@@ -216,7 +216,9 @@ function SealGenerator({
   onSealGenerated,
 }: SealGeneratorProps) {
   const sealTrigger = useAppStore((s) => s.sealTrigger);
-  const lastTrigger = useRef(0);
+  // Initialize to current value so a stale trigger from a previous session
+  // doesn't fire immediately when this component mounts.
+  const lastTrigger = useRef(sealTrigger);
 
   useFrame(() => {
     if (sealTrigger === lastTrigger.current) return;
@@ -581,6 +583,11 @@ export default function ModelPreview() {
     setLoadError(null);
     setGlassesFile(file);
     resetAlignment();
+    // Clear any seal generated for the previous glasses model.
+    useAppStore.getState().generatedSeal?.dispose();
+    setGeneratedSeal(null);
+    setHardpoints(null);
+    setSealRawEdges(null);
   };
 
   const handleWidthMmChange = (mm: number) => {
