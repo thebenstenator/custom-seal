@@ -576,6 +576,12 @@ export default function ModelPreview() {
     if (!generatedSeal) return;
     const geo = generatedSeal.clone();
     geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+    // Flip 180° around X so the face-contact side faces down toward the print bed.
+    geo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI));
+    // Translate so the lowest point sits at Z = 0.
+    geo.computeBoundingBox();
+    const minZ = geo.boundingBox?.min.z ?? 0;
+    if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
     exportSTL(geo, `seal-${slug}-pla.stl`);
   };
 
