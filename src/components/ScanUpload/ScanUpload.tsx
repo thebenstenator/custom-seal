@@ -26,9 +26,12 @@ function WizardHeadMesh({
   euler: [number, number, number];
 }) {
   return (
-    <mesh geometry={geometry} rotation={euler} scale={0.01}>
-      <meshStandardMaterial color="#f4a582" side={THREE.DoubleSide} />
-    </mesh>
+    // Same group rotation as the preview page so the stored euler is consistent.
+    <group rotation={[0, Math.PI / 2, 0]}>
+      <mesh geometry={geometry} rotation={euler} scale={0.01}>
+        <meshStandardMaterial color="#f4a582" side={THREE.DoubleSide} />
+      </mesh>
+    </group>
   );
 }
 
