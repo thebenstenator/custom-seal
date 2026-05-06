@@ -477,32 +477,57 @@ export default function ModelPreview() {
   const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
 
   const handleAutoOrient = () => {
-    const head = headMeshRef.current;
+    const head    = headMeshRef.current;
+    const glasses = glassesMeshRef.current;
     if (!head) return;
 
     head.updateMatrixWorld(true);
 
+    // ── Position ────────────────────────────────────────────────────────────
     const headBox = new THREE.Box3().setFromObject(head);
+    const eyeY    = headBox.min.y + (headBox.max.y - headBox.min.y) * 0.65;
 
-    // Eye level at ~65% of head bbox height
-    const eyeY = headBox.min.y + (headBox.max.y - headBox.min.y) * 0.65;
-
-    // Assume face points toward world +Z (set by the orientation wizard).
-    // Cast a ray in from in front to find the face surface depth.
+    // Face is assumed to point toward world +Z after the orientation wizard.
+    // Raycast from in front to find the face-surface depth.
     if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
     const rc = new THREE.Raycaster();
     rc.near = 0;
-    rc.far = 30;
+    rc.far  = 30;
     rc.set(new THREE.Vector3(0, eyeY, 15), new THREE.Vector3(0, 0, -1));
     const hits = rc.intersectObject(head, false);
 
     const faceZ = hits.length > 0 ? hits[0].point.z : headBox.max.z;
     const faceY = hits.length > 0 ? hits[0].point.y : eyeY;
 
-    // Group rotation Y(π/2): world(x,y,z) → group-local(-z, y, x).
-    // Place glasses 5 mm in front of (above) the face surface.
+    // Group rotation Y(π/2): world → group-local gives localX = −worldZ.
+    // Place glasses 5 mm in front of the face surface.
     setGlassesPosition([-(faceZ + 0.05), faceY, 0]);
-    setGlassesRotation([...DEFAULT_GLASSES_ROTATION] as [number, number, number]);
+
+    // ── Rotation ────────────────────────────────────────────────────────────
+    // Start from the default orientation (glasses depth axis → toward head).
+    const q = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(...DEFAULT_GLASSES_ROTATION)
+    );
+
+    // After mergeSceneGeometries, Z is always the smallest dimension (depth).
+    // If Y > X the glasses are vertical — apply Rz(+90°) in geometry-local
+    // space to swap those axes so the lens-to-lens direction becomes X.
+    if (glasses) {
+      glasses.geometry.computeBoundingBox();
+      const gb = glasses.geometry.boundingBox!;
+      const gx = gb.max.x - gb.min.x;
+      const gy = gb.max.y - gb.min.y;
+      if (gy > gx) {
+        // Post-multiply = apply the fix rotation in geometry-local space first.
+        const fix = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1), Math.PI / 2
+        );
+        q.multiply(fix);
+      }
+    }
+
+    const euler = new THREE.Euler().setFromQuaternion(q);
+    setGlassesRotation([euler.x, euler.y, euler.z]);
   };
 
   const handlePLADownload = () => {
