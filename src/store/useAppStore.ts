@@ -4,10 +4,10 @@ import * as THREE from "three";
 import type { Frame } from "../data/frames";
 import type { Measurements } from "../utils/geometry/parametricSeal";
 
-export const DEFAULT_GLASSES_POSITION: [number, number, number] = [-0.875, 0.405, -0.025];
-export const DEFAULT_GLASSES_ROTATION: [number, number, number] = [0, Math.PI / 2, 0];
+export const DEFAULT_GLASSES_POSITION: [number, number, number] = [-0.405, -0.025, -0.875];
+export const DEFAULT_GLASSES_ROTATION: [number, number, number] = [Math.PI, 3 * Math.PI / 2, 0];
 export const DEFAULT_GLASSES_SCALE = 0.01;
-export const DEFAULT_HEAD_ROTATION: [number, number, number] = [-Math.PI / 2, 0, 0];
+export const DEFAULT_HEAD_ROTATION: [number, number, number] = [-Math.PI / 2, -Math.PI / 2, -Math.PI / 2];
 
 // Raw edge paths stored after seal generation — used to produce TPU flat export.
 export interface SealRawEdges {

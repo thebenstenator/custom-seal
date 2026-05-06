@@ -1,6 +1,6 @@
-import { Component, Suspense } from "react";
+import { Component, Suspense, useEffect } from "react";
 import type { ReactNode, RefObject } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, GizmoHelper, GizmoViewport } from "@react-three/drei";
 
 interface ErrorBoundaryState { hasError: boolean }
@@ -36,12 +36,22 @@ class CanvasErrorBoundary extends Component<{ children: ReactNode }, ErrorBounda
   }
 }
 
+// Sets camera.up = Z so OrbitControls orbits around the Z axis and the gizmo shows Z as up.
+function ZUpCamera() {
+  const { camera } = useThree();
+  useEffect(() => {
+    camera.up.set(0, 0, 1);
+  }, [camera]);
+  return null;
+}
+
 interface SceneCanvasProps {
   cameraPosition?: [number, number, number];
   children?: ReactNode;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   controlsRef?: RefObject<any>;
   showGizmo?: boolean;
+  zUp?: boolean;
 }
 
 export default function SceneCanvas({
@@ -49,11 +59,13 @@ export default function SceneCanvas({
   children,
   controlsRef,
   showGizmo = false,
+  zUp = false,
 }: SceneCanvasProps) {
   return (
     <CanvasErrorBoundary>
-      <Canvas camera={{ position: cameraPosition, fov: 50 }}>
+      <Canvas camera={{ position: cameraPosition, fov: 50, up: zUp ? [0, 0, 1] : [0, 1, 0] }}>
         <Suspense fallback={null}>
+          {zUp && <ZUpCamera />}
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
           <directionalLight position={[-10, -10, -5]} intensity={0.3} />

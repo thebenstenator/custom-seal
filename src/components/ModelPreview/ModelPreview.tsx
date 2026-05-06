@@ -492,7 +492,7 @@ export default function ModelPreview() {
     const ctrl = orbitRef.current;
     if (!ctrl) return;
     ctrl.object.position.set(...pos);
-    ctrl.target.set(0, 0.3, 0);
+    ctrl.target.set(0, 0, 0.3);
     ctrl.update();
   };
 
@@ -505,41 +505,40 @@ export default function ModelPreview() {
     if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
 
     // ── Position ────────────────────────────────────────────────────────────
-    const headBox    = new THREE.Box3().setFromObject(head);
+    // Coordinate system: Z is up, Y is front (face points toward +Y), X is left-right.
+    const headBox     = new THREE.Box3().setFromObject(head);
     const headCenterX = (headBox.min.x + headBox.max.x) / 2;
-    const headHeight  = headBox.max.y - headBox.min.y;
+    const headHeight  = headBox.max.z - headBox.min.z; // height along Z
 
     const rc = new THREE.Raycaster();
     rc.near = 0;
     rc.far  = 30;
 
-    // Sweep 14 rays from 48% to 76% of head height to find the nose tip —
-    // the most-forward (highest world-Z) point on the face centre-line.
-    let noseZ = -Infinity;
-    let noseY = headBox.min.y + headHeight * 0.65; // fallback
+    // Sweep 14 rays from 48% to 76% of head height (Z) to find the nose tip —
+    // the most-forward (highest world-Y) point on the face centre-line.
+    let noseFwdY    = -Infinity;
+    let noseHeightZ = headBox.min.z + headHeight * 0.65; // fallback
     for (let i = 0; i < 14; i++) {
       const t       = 0.48 + (i / 13) * 0.28;
-      const sampleY = headBox.min.y + headHeight * t;
-      rc.set(new THREE.Vector3(headCenterX, sampleY, 15), new THREE.Vector3(0, 0, -1));
+      const sampleZ = headBox.min.z + headHeight * t;
+      rc.set(new THREE.Vector3(headCenterX, 15, sampleZ), new THREE.Vector3(0, -1, 0));
       const hits = rc.intersectObject(head, false);
-      if (hits.length > 0 && hits[0].point.z > noseZ) {
-        noseZ = hits[0].point.z;
-        noseY = sampleY;
+      if (hits.length > 0 && hits[0].point.y > noseFwdY) {
+        noseFwdY    = hits[0].point.y;
+        noseHeightZ = sampleZ;
       }
     }
-    if (!isFinite(noseZ)) noseZ = headBox.max.z;
+    if (!isFinite(noseFwdY)) noseFwdY = headBox.max.y;
 
-    // The glasses bridge sits above the nose tip. Step up ~5% of head height
-    // to move from the tip to the nose bridge, then re-sample surface depth.
-    const bridgeY    = noseY + headHeight * 0.05;
-    rc.set(new THREE.Vector3(headCenterX, bridgeY, 15), new THREE.Vector3(0, 0, -1));
+    // The glasses bridge sits above the nose tip. Step up ~5% of head height.
+    const bridgeHeightZ = noseHeightZ + headHeight * 0.05;
+    rc.set(new THREE.Vector3(headCenterX, 15, bridgeHeightZ), new THREE.Vector3(0, -1, 0));
     const bridgeHits = rc.intersectObject(head, false);
-    const bridgeZ    = bridgeHits.length > 0 ? bridgeHits[0].point.z : noseZ;
+    const bridgeFwdY = bridgeHits.length > 0 ? bridgeHits[0].point.y : noseFwdY;
 
-    // Convert world (headCenterX, bridgeY, bridgeZ + 5mm) → group-local.
-    // Ry(PI/2) group: worldX = localZ, worldZ = -localX.
-    // Place glasses 5 mm in front of the nose bridge surface.
-    setGlassesPosition([-(bridgeZ + 0.05), bridgeY, headCenterX]);
+    // Convert world → group-local for new rotation [PI/2, 0, -PI/2]:
+    //   localX = -worldZ,  localY = worldX,  localZ = -worldY
+    setGlassesPosition([-bridgeHeightZ, headCenterX, -(bridgeFwdY + 0.05)]);
 
     // ── Rotation ────────────────────────────────────────────────────────────
     // Start from the default orientation (glasses depth axis → toward head).
@@ -560,10 +559,10 @@ export default function ModelPreview() {
         q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
 
         if (gz > gx) {
-          // Frame is also "laying down" — height is along geometry Z, depth along X.
-          // After the horizontal fix the frame sits in world XZ (flat on a table).
-          // Pre-multiply = apply in group-local space to rotate the frame upright into world XY.
-          q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
+          // Frame is also "laying down". Pre-multiply = apply in group-local space.
+          // Group-local Z = world -X in the Z-up system, so negate the angle to
+          // rotate the frame upright around world +X.
+          q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2));
         }
       }
     }
@@ -680,9 +679,9 @@ export default function ModelPreview() {
   type AxisKey = "x" | "y" | "z";
 
   const posControls: Array<[string, AxisKey, number, number]> = [
-    ["Forward/Back", "x", glassesPosition[0], DEFAULT_GLASSES_POSITION[0]],
-    ["Up/Down",      "y", glassesPosition[1], DEFAULT_GLASSES_POSITION[1]],
-    ["Left/Right",   "z", glassesPosition[2], DEFAULT_GLASSES_POSITION[2]],
+    ["Up/Down",      "x", glassesPosition[0], DEFAULT_GLASSES_POSITION[0]],
+    ["Left/Right",   "y", glassesPosition[1], DEFAULT_GLASSES_POSITION[1]],
+    ["Forward/Back", "z", glassesPosition[2], DEFAULT_GLASSES_POSITION[2]],
   ];
 
   const rotControls: Array<[string, AxisKey, number, number]> = [
@@ -699,7 +698,7 @@ export default function ModelPreview() {
   return (
     <div className="model-preview">
       <div className="page-header">
-        <Button variant="back" onClick={() => navigate("/scan")}>
+        <Button variant="back" onClick={() => navigate(userScan ? "/scan" : "/fit-type")}>
           ← Back
         </Button>
         <h2 className="page-header__title">Position Your Glasses</h2>
@@ -727,11 +726,11 @@ export default function ModelPreview() {
         <div className="model-preview__viewer">
           <div className="view-snap">
             {([
-              ["F",  [0,   0.3,  7.5]],
-              ["B",  [0,   0.3, -7.5]],
-              ["L",  [-7.5, 0.3, 0  ]],
-              ["R",  [7.5,  0.3, 0  ]],
-              ["T",  [0,   7.5,  0  ]],
+              ["F",  [0,    7.5,  0.3]],
+              ["B",  [0,   -7.5,  0.3]],
+              ["L",  [-7.5, 0,    0.3]],
+              ["R",  [7.5,  0,    0.3]],
+              ["T",  [0,    0,    7.5]],
             ] as [string, [number,number,number]][]).map(([label, pos]) => (
               <button key={label} className="view-snap__btn" onClick={() => snapView(pos)} title={
                 label === "F" ? "Front" : label === "B" ? "Back" :
@@ -739,8 +738,8 @@ export default function ModelPreview() {
               }>{label}</button>
             ))}
           </div>
-          <SceneCanvas cameraPosition={[0, 0, 7.5]} controlsRef={orbitRef} showGizmo>
-            <group rotation={[0, Math.PI / 2, 0]}>
+          <SceneCanvas cameraPosition={[0, 7.5, 0]} controlsRef={orbitRef} showGizmo zUp>
+            <group rotation={[Math.PI / 2, 0, -Math.PI / 2]}>
               <HeadModel
                 scanFile={userScan}
                 rotation={headRotation}
@@ -888,7 +887,7 @@ export default function ModelPreview() {
                       onClick={() => handlePositionChange(axis, def)}
                     >↺</button>
                   </div>
-                  {axis === "x" && (
+                  {axis === "z" && (
                     <p className="control__subtext">
                       Nose bridge gap:{" "}
                       {bridgeDistMm !== null
@@ -1009,13 +1008,15 @@ export default function ModelPreview() {
             <button onClick={triggerSealGeneration} className="controls__generate">
               Generate Seal Preview
             </button>
-            <button
-              onClick={() => setSymmetrize((v) => !v)}
-              className={`controls__toggle ${symmetrize ? "controls__toggle--active" : ""}`}
-              title="Equalize left/right seal depth to compensate for slight frame tilt or scan asymmetry"
-            >
-              Symmetrize
-            </button>
+            {userScan && (
+              <button
+                onClick={() => setSymmetrize((v) => !v)}
+                className={`controls__toggle ${symmetrize ? "controls__toggle--active" : ""}`}
+                title="Equalize left/right seal depth to compensate for slight frame tilt or scan asymmetry"
+              >
+                Symmetrize
+              </button>
+            )}
           </div>
 
           {generatedSeal && (

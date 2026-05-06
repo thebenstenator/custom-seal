@@ -9,13 +9,14 @@ import Button from "../shared/Button";
 import "./ScanUpload.css";
 
 // Rotation buttons: label, world-axis unit vector, angle (radians)
+// World convention: Z = up, Y = front (face direction), X = left-right.
 const ORIENT_BUTTONS = [
-  { label: "↻ Spin Left",  axis: new THREE.Vector3(0, 1, 0),  angle:  Math.PI / 2 },
-  { label: "↺ Spin Right", axis: new THREE.Vector3(0, 1, 0),  angle: -Math.PI / 2 },
+  { label: "↻ Spin Left",  axis: new THREE.Vector3(0, 0, 1),  angle:  Math.PI / 2 },
+  { label: "↺ Spin Right", axis: new THREE.Vector3(0, 0, 1),  angle: -Math.PI / 2 },
   { label: "↑ Tilt Up",    axis: new THREE.Vector3(1, 0, 0),  angle: -Math.PI / 2 },
   { label: "↓ Tilt Down",  axis: new THREE.Vector3(1, 0, 0),  angle:  Math.PI / 2 },
-  { label: "↰ Roll CW",    axis: new THREE.Vector3(0, 0, 1),  angle: -Math.PI / 2 },
-  { label: "↱ Roll CCW",   axis: new THREE.Vector3(0, 0, 1),  angle:  Math.PI / 2 },
+  { label: "↰ Roll CW",    axis: new THREE.Vector3(0, 1, 0),  angle: -Math.PI / 2 },
+  { label: "↱ Roll CCW",   axis: new THREE.Vector3(0, 1, 0),  angle:  Math.PI / 2 },
 ];
 
 function WizardHeadMesh({
@@ -27,7 +28,7 @@ function WizardHeadMesh({
 }) {
   return (
     // Same group rotation as the preview page so the stored euler is consistent.
-    <group rotation={[0, Math.PI / 2, 0]}>
+    <group rotation={[Math.PI / 2, 0, -Math.PI / 2]}>
       <mesh geometry={geometry} rotation={euler} scale={0.01}>
         <meshStandardMaterial color="#f4a582" side={THREE.DoubleSide} />
       </mesh>
@@ -224,7 +225,7 @@ export default function ScanUpload() {
                 ) : !geometry ? (
                   <div className="orient-wizard__loading">Loading scan…</div>
                 ) : (
-                  <SceneCanvas cameraPosition={[0, 0, 2.5]}>
+                  <SceneCanvas cameraPosition={[0, 2.5, 0]} zUp>
                     <WizardHeadMesh geometry={geometry} euler={wizEuler} />
                   </SceneCanvas>
                 )}
