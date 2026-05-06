@@ -509,20 +509,24 @@ export default function ModelPreview() {
       new THREE.Euler(...DEFAULT_GLASSES_ROTATION)
     );
 
-    // After mergeSceneGeometries, Z is always the smallest dimension (depth).
-    // If Y > X the glasses are vertical — apply Rz(+90°) in geometry-local
-    // space to swap those axes so the lens-to-lens direction becomes X.
     if (glasses) {
       glasses.geometry.computeBoundingBox();
       const gb = glasses.geometry.boundingBox!;
       const gx = gb.max.x - gb.min.x;
       const gy = gb.max.y - gb.min.y;
+      const gz = gb.max.z - gb.min.z;
+
       if (gy > gx) {
-        // Post-multiply = apply the fix rotation in geometry-local space first.
-        const fix = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1), Math.PI / 2
-        );
-        q.multiply(fix);
+        // Glasses are "vertical" (lens-to-lens along geometry Y).
+        // Post-multiply = apply in geometry-local space first, making lens-to-lens horizontal.
+        q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
+
+        if (gz > gx) {
+          // Frame is also "laying down" — height is along geometry Z, depth along X.
+          // After the horizontal fix the frame sits in world XZ (flat on a table).
+          // Pre-multiply = apply in group-local space to rotate the frame upright into world XY.
+          q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
+        }
       }
     }
 
