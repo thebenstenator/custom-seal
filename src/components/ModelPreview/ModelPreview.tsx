@@ -553,15 +553,14 @@ export default function ModelPreview() {
       const gy = gb.max.y - gb.min.y;
       const gz = gb.max.z - gb.min.z;
 
-      if (gy > gx) {
-        // Glasses are "vertical" (lens-to-lens along geometry Y).
-        // Post-multiply = apply in geometry-local space first, making lens-to-lens horizontal.
+      if (gx > gy) {
+        // Lens-to-lens is along geometry X (unusual export). DEFAULT_GLASSES_ROTATION
+        // expects lens-to-lens along Y, so rotate 90° in geometry-local space to swap X↔Y.
         q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
 
-        if (gz > gx) {
-          // Frame is also "laying down". Pre-multiply = apply in group-local space.
-          // Group-local Z = world -X in the Z-up system, so negate the angle to
-          // rotate the frame upright around world +X.
+        if (gz > gy) {
+          // Frame is also laying flat. Pre-multiply rotates in group-local space
+          // to stand the frame upright.
           q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2));
         }
       }
