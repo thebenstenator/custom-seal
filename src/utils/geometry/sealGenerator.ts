@@ -37,58 +37,6 @@ function radialOffsets(
   });
 }
 
-function buildThickBand(
-  glassesEdge: THREE.Vector3[],
-  faceEdge: THREE.Vector3[],
-  faceNormal: THREE.Vector3,
-  wallThickness: number,
-): THREE.BufferGeometry | null {
-  const n = Math.min(glassesEdge.length, faceEdge.length);
-  if (n < 3) return null;
-
-  const offsets = radialOffsets(glassesEdge, faceNormal, wallThickness / 2);
-
-  const og  = glassesEdge.map((p, i) => p.clone().add(offsets[i]));
-  const ig  = glassesEdge.map((p, i) => p.clone().sub(offsets[i]));
-  const of_ = faceEdge.map((p, i)    => p.clone().add(offsets[i]));
-  const if_ = faceEdge.map((p, i)    => p.clone().sub(offsets[i]));
-
-  const positions = new Float32Array(n * 4 * 3);
-  const set = (idx: number, v: THREE.Vector3) => {
-    positions[idx * 3]     = v.x;
-    positions[idx * 3 + 1] = v.y;
-    positions[idx * 3 + 2] = v.z;
-  };
-  for (let i = 0; i < n; i++) {
-    set(i,       og[i]);
-    set(n + i,   ig[i]);
-    set(2*n + i, of_[i]);
-    set(3*n + i, if_[i]);
-  }
-
-  const indices: number[] = [];
-  // A seal band must always be a closed ring. Even when the path's start/end
-  // points are slightly apart (e.g. at a temple arm junction), we close it.
-  const segs = n;
-
-  for (let i = 0; i < segs; i++) {
-    const j = (i + 1) % n;
-    indices.push(i,      j,      2*n+i);
-    indices.push(j,      2*n+j,  2*n+i);
-    indices.push(n+i,    3*n+i,  n+j);
-    indices.push(n+j,    3*n+i,  3*n+j);
-    indices.push(i,      n+i,    j);
-    indices.push(n+i,    n+j,    j);
-    indices.push(2*n+i,  2*n+j,  3*n+i);
-    indices.push(2*n+j,  3*n+j,  3*n+i);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
-}
 
 // Flattens both edges of a seal ring together for TPU flat printing.
 //
@@ -124,8 +72,98 @@ export function flattenEdgesForTPU(
   return { flatFrame, shiftedFace };
 }
 
-export const SEAL_DEPTH     = 0.05; // fallback flat depth (5 mm at 0.01 scale)
-const WALL_THICKNESS = 0.009;
+export const SEAL_DEPTH    = 0.05;  // fallback flat depth (5 mm at 0.01 scale)
+const WALL_THICKNESS       = 0.009; // 0.9 mm body thickness
+const FLANGE_THICKNESS     = 0.020; // 2.0 mm mating flange thickness
+const FLANGE_DEPTH         = 0.020; // 2.0 mm flange height (from glasses contact face)
+
+// Builds a seal band with an upside-down-T cross section:
+//   wide flange (FLANGE_THICKNESS) for the first FLANGE_DEPTH toward the face,
+//   then a narrow body (WALL_THICKNESS) the rest of the way to the face.
+// 8 vertex rings: [ogf, igf, ogfb, igfb, ogwb, igwb, ogwe, igwe]
+function buildTBand(
+  glassesEdge: THREE.Vector3[],
+  faceEdge:    THREE.Vector3[],
+  faceNormal:  THREE.Vector3,
+  wallThickness:   number,
+  flangeThickness: number,
+  flangeDepth:     number,
+): THREE.BufferGeometry | null {
+  const n = Math.min(glassesEdge.length, faceEdge.length);
+  if (n < 3) return null;
+
+  const flangeOff = radialOffsets(glassesEdge, faceNormal, flangeThickness / 2);
+  const wallOff   = radialOffsets(glassesEdge, faceNormal, wallThickness   / 2);
+
+  // Depth-0 rings (glasses frame contact)
+  const ogf  = glassesEdge.map((p, i) => p.clone().add(flangeOff[i]));
+  const igf  = glassesEdge.map((p, i) => p.clone().sub(flangeOff[i]));
+
+  // Rings at flangeDepth
+  const fBase = extrudeAlongNormal(glassesEdge, faceNormal, flangeDepth);
+  const ogfb  = fBase.map((p, i) => p.clone().add(flangeOff[i])); // outer flange bottom
+  const igfb  = fBase.map((p, i) => p.clone().sub(flangeOff[i])); // inner flange bottom
+  const ogwb  = fBase.map((p, i) => p.clone().add(wallOff[i]));   // outer wall top
+  const igwb  = fBase.map((p, i) => p.clone().sub(wallOff[i]));   // inner wall top
+
+  // Rings at faceEdge
+  const ogwe  = faceEdge.map((p, i) => p.clone().add(wallOff[i]));
+  const igwe  = faceEdge.map((p, i) => p.clone().sub(wallOff[i]));
+
+  const rings = [ogf, igf, ogfb, igfb, ogwb, igwb, ogwe, igwe];
+  const positions = new Float32Array(n * 8 * 3);
+  rings.forEach((ring, r) => {
+    ring.forEach((v, i) => {
+      const b = (r * n + i) * 3;
+      positions[b] = v.x; positions[b + 1] = v.y; positions[b + 2] = v.z;
+    });
+  });
+
+  const V = (r: number, i: number) => r * n + i;
+  const indices: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+
+    // Top cap — normal toward glasses (-faceNormal)
+    indices.push(V(0,i), V(1,i), V(0,j));
+    indices.push(V(1,i), V(1,j), V(0,j));
+
+    // Outer flange wall (depth 0 → flangeDepth)
+    indices.push(V(0,i), V(0,j), V(2,i));
+    indices.push(V(0,j), V(2,j), V(2,i));
+
+    // Inner flange wall (depth 0 → flangeDepth)
+    indices.push(V(1,i), V(3,i), V(1,j));
+    indices.push(V(1,j), V(3,i), V(3,j));
+
+    // Outer step face — underside of flange shoulder, normal toward face (+faceNormal)
+    indices.push(V(2,i), V(2,j), V(4,i));
+    indices.push(V(2,j), V(4,j), V(4,i));
+
+    // Inner step face — underside of flange shoulder, normal toward face (+faceNormal)
+    indices.push(V(5,i), V(5,j), V(3,i));
+    indices.push(V(5,j), V(3,j), V(3,i));
+
+    // Outer body wall (flangeDepth → faceEdge)
+    indices.push(V(4,i), V(4,j), V(6,i));
+    indices.push(V(4,j), V(6,j), V(6,i));
+
+    // Inner body wall (flangeDepth → faceEdge)
+    indices.push(V(5,i), V(7,i), V(5,j));
+    indices.push(V(5,j), V(7,i), V(7,j));
+
+    // Bottom cap — normal toward face (+faceNormal)
+    indices.push(V(6,i), V(6,j), V(7,i));
+    indices.push(V(6,j), V(7,j), V(7,i));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
 
 export function generateSeal(
   worldSealPath: THREE.Vector3[],
@@ -134,7 +172,7 @@ export function generateSeal(
 ): THREE.BufferGeometry | null {
   if (!worldSealPath || worldSealPath.length < 3) return null;
   const edge = faceEdge ?? extrudeAlongNormal(worldSealPath, faceNormal, SEAL_DEPTH);
-  return buildThickBand(worldSealPath, edge, faceNormal, WALL_THICKNESS);
+  return buildTBand(worldSealPath, edge, faceNormal, WALL_THICKNESS, FLANGE_THICKNESS, FLANGE_DEPTH);
 }
 
 function mergeGeos(geos: Array<THREE.BufferGeometry | null>): THREE.BufferGeometry | null {
