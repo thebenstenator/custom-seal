@@ -3,10 +3,6 @@ import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter";
 import { Download } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
-import {
-  generateDualSeal,
-  flattenEdgesForTPU,
-} from "../../utils/geometry/sealGenerator";
 import SceneCanvas from "../shared/SceneCanvas";
 import Button from "../shared/Button";
 import Notice from "../shared/Notice";
@@ -44,8 +40,6 @@ export default function Confirmation() {
   const selectedFrame   = useAppStore((s) => s.selectedFrame);
   const generatedSeal   = useAppStore((s) => s.generatedSeal);
   const measurementMode = useAppStore((s) => s.measurementMode);
-  const sealRawEdges    = useAppStore((s) => s.sealRawEdges);
-
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
   const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
@@ -55,51 +49,6 @@ export default function Confirmation() {
     const geo = generatedSeal.clone();
     geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
     exportSTL(geo, `seal-${slug}-pla.stl`);
-  };
-
-  const handleTPUDownload = () => {
-    if (!generatedSeal) return;
-
-    let geo: THREE.BufferGeometry;
-
-    if (sealRawEdges && (sealRawEdges.leftPath || sealRawEdges.rightPath)) {
-      // Re-generate with both edges shifted together to preserve seal depth.
-      // The same per-point offset is applied to the frame and face sides so the
-      // frame→face distance is unchanged — the depth is not added to at curved areas.
-      const { leftPath, rightPath, leftFace, rightFace, faceNormal } = sealRawEdges;
-      const { flatFrame: flatLeft,  shiftedFace: shiftedLeftFace  } =
-        leftPath  && leftFace  ? flattenEdgesForTPU(leftPath,  leftFace,  faceNormal) : { flatFrame: null, shiftedFace: null };
-      const { flatFrame: flatRight, shiftedFace: shiftedRightFace } =
-        rightPath && rightFace ? flattenEdgesForTPU(rightPath, rightFace, faceNormal) : { flatFrame: null, shiftedFace: null };
-      const flat = generateDualSeal(flatLeft, flatRight, faceNormal, shiftedLeftFace, shiftedRightFace);
-      if (!flat) return;
-      geo = flat;
-    } else if (sealRawEdges) {
-      // Fallback seal (generated from bbox) — already flat, just use existing geometry.
-      geo = generatedSeal.clone();
-    } else {
-      // No raw edges stored — export as-is (user can re-generate).
-      geo = generatedSeal.clone();
-    }
-
-    // Scale to mm.
-    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
-
-    // Rotate so flat (frame-contact) side faces the print bed (+Z up in slicer → frame side down).
-    if (sealRawEdges) {
-      const q = new THREE.Quaternion().setFromUnitVectors(
-        sealRawEdges.faceNormal.clone().normalize(),
-        new THREE.Vector3(0, 0, 1),
-      );
-      geo.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));
-    }
-
-    // Shift so minimum Z = 0 (flat side sits on print bed).
-    geo.computeBoundingBox();
-    const minZ = geo.boundingBox?.min.z ?? 0;
-    if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
-
-    exportSTL(geo, `seal-${slug}-tpu-flat.stl`);
   };
 
   return (
@@ -144,23 +93,6 @@ export default function Confirmation() {
               </button>
             </div>
 
-            <div className="confirmation__download-option">
-              <div className="confirmation__download-info">
-                <h4 className="confirmation__download-title">TPU — Flexible</h4>
-                <p className="confirmation__download-desc">
-                  Frame-contact side is flattened so it prints face-down with no
-                  supports. TPU's flexibility lets it conform back to the curved
-                  frame when applied.
-                </p>
-              </div>
-              <button
-                className="confirmation__download-btn confirmation__download-btn--tpu"
-                onClick={handleTPUDownload}
-              >
-                <Download size={18} />
-                Download STL (TPU — Flat)
-              </button>
-            </div>
           </div>
         </>
       ) : (
@@ -193,8 +125,7 @@ export default function Confirmation() {
         <ul className="notice__list">
           <li>Recommended layer height: <strong>0.2 mm</strong></li>
           <li>Infill: <strong>15–20%</strong> — the seal doesn't need to be solid</li>
-          <li>TPU: no supports needed — print flat, frame-contact side down</li>
-          <li>PLA: print curved-side down with supports enabled</li>
+          <li>Print curved-side down with supports enabled</li>
         </ul>
       </Notice>
 
