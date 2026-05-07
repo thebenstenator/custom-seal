@@ -495,8 +495,7 @@ export default function ModelPreview() {
   };
 
   const handleAutoOrient = () => {
-    const head    = headMeshRef.current;
-    const glasses = glassesMeshRef.current;
+    const head = headMeshRef.current;
     if (!head) return;
 
     head.updateMatrixWorld(true);
@@ -540,32 +539,7 @@ export default function ModelPreview() {
 
     // ── Rotation ────────────────────────────────────────────────────────────
     // Start from the default orientation (glasses depth axis → toward head).
-    const q = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(...DEFAULT_GLASSES_ROTATION)
-    );
-
-    if (glasses) {
-      glasses.geometry.computeBoundingBox();
-      const gb = glasses.geometry.boundingBox!;
-      const gx = gb.max.x - gb.min.x;
-      const gy = gb.max.y - gb.min.y;
-      const gz = gb.max.z - gb.min.z;
-
-      if (gx > gy) {
-        // Lens-to-lens is along geometry X (unusual export). DEFAULT_GLASSES_ROTATION
-        // expects lens-to-lens along Y, so rotate 90° in geometry-local space to swap X↔Y.
-        q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2));
-
-        if (gz > gy) {
-          // Frame is also laying flat. Pre-multiply rotates in group-local space
-          // to stand the frame upright.
-          q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2));
-        }
-      }
-    }
-
-    const euler = new THREE.Euler().setFromQuaternion(q);
-    setGlassesRotation([euler.x, euler.y, euler.z]);
+    setGlassesRotation([...DEFAULT_GLASSES_ROTATION]);
   };
 
   const handlePLADownload = () => {
