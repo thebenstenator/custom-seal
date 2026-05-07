@@ -38,35 +38,56 @@ function radialOffsets(
 }
 
 
-// Flattens both edges of a seal ring together for TPU flat printing.
+// Unrolls both edges of a seal ring for TPU flat printing.
 //
-// The per-point shift needed to flatten the frame-contact edge is also applied
-// to the face-contact edge, so the depth (frame→face distance) is preserved at
-// every point. When the printed flat frame side is bent back onto the curved
-// glasses frame, the face side moves with it and lands at the original
-// face-conforming position — no extra thickness is introduced at curved areas.
+// The old approach (translate both edges by the same normal shift) preserved
+// the angle of each cross-section in the flat print. When the flat seal is bent
+// back onto the curved frame, those angles rotate with the curve and the face
+// edge ends up pushed too far into the face.
 //
-// Uses min(dot(p, normal)) as the flat plane so all face-contact points remain
-// strictly on the face side (centroid would allow inversions at curved areas).
+// This approach decomposes the depth vector (glasses→face) at each point into:
+//   - along-tangent: preserved as-is (bending doesn't change path lengths)
+//   - perp-to-tangent: rotated to align with the flat normal
+// When the printed seal is bent back onto the curved frame, the perp component
+// rotates with it and the face edge lands at the correct position.
 export function flattenEdgesForTPU(
   glassesEdge: THREE.Vector3[],
   faceEdge: THREE.Vector3[],
   normal: THREE.Vector3,
 ): { flatFrame: THREE.Vector3[]; shiftedFace: THREE.Vector3[] } {
+  const n = Math.min(glassesEdge.length, faceEdge.length);
+
+  // Flat plane at the minimum normal projection of the glasses edge.
   let planeD = Infinity;
-  for (const p of glassesEdge) {
-    const d = p.dot(normal);
+  for (let i = 0; i < n; i++) {
+    const d = glassesEdge[i].dot(normal);
     if (d < planeD) planeD = d;
   }
 
-  const n = Math.min(glassesEdge.length, faceEdge.length);
-  const flatFrame: THREE.Vector3[]   = [];
-  const shiftedFace: THREE.Vector3[] = [];
-
+  // Flatten glasses edge: translate each point along the normal to the flat plane.
+  const flatFrame: THREE.Vector3[] = [];
   for (let i = 0; i < n; i++) {
     const shift = planeD - glassesEdge[i].dot(normal);
     flatFrame.push(glassesEdge[i].clone().addScaledVector(normal, shift));
-    shiftedFace.push(faceEdge[i].clone().addScaledVector(normal, shift));
+  }
+
+  // Unroll face edge: keep along-tangent depth component, rotate perp component
+  // to align with the flat normal.
+  const shiftedFace: THREE.Vector3[] = [];
+  for (let i = 0; i < n; i++) {
+    const tangent = glassesEdge[(i + 1) % n].clone()
+      .sub(glassesEdge[(i - 1 + n) % n])
+      .normalize();
+
+    const depth = faceEdge[i].clone().sub(glassesEdge[i]);
+    const depthAlongTangent = depth.dot(tangent);
+    const depthPerpMag = depth.clone().addScaledVector(tangent, -depthAlongTangent).length();
+
+    shiftedFace.push(
+      flatFrame[i].clone()
+        .addScaledVector(tangent,  depthAlongTangent)
+        .addScaledVector(normal,   depthPerpMag),
+    );
   }
 
   return { flatFrame, shiftedFace };
