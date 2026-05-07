@@ -71,8 +71,12 @@ export function flattenEdgesForTPU(
     flatFrame.push(glassesEdge[i].clone().addScaledVector(normal, shift));
   }
 
-  // Unroll face edge: keep along-tangent depth component, rotate perp component
-  // to align with the flat normal.
+  // Unroll face edge: use only the component of the depth vector that is
+  // perpendicular to the path tangent. The tangential component is discarded
+  // because adding it to the flat positions creates large distortions at
+  // corners. The perp-magnitude is placed straight along the flat normal so
+  // that when the printed seal is bent back onto the curved frame the face
+  // edge lands at the correct depth.
   const shiftedFace: THREE.Vector3[] = [];
   for (let i = 0; i < n; i++) {
     const tangent = glassesEdge[(i + 1) % n].clone()
@@ -84,9 +88,7 @@ export function flattenEdgesForTPU(
     const depthPerpMag = depth.clone().addScaledVector(tangent, -depthAlongTangent).length();
 
     shiftedFace.push(
-      flatFrame[i].clone()
-        .addScaledVector(tangent,  depthAlongTangent)
-        .addScaledVector(normal,   depthPerpMag),
+      flatFrame[i].clone().addScaledVector(normal, depthPerpMag),
     );
   }
 
