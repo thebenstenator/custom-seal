@@ -37,7 +37,12 @@ interface HeadModelProps {
   onLoadError?: (msg: string) => void;
 }
 
-function HeadModel({ scanFile, rotation, meshRef, onLoadError }: HeadModelProps) {
+function HeadModel({
+  scanFile,
+  rotation,
+  meshRef,
+  onLoadError,
+}: HeadModelProps) {
   const uploaded = useUploadedModel(scanFile, onLoadError);
   const defaultGeo = useSTLModel("/models/default-head.stl");
   const geometry = scanFile ? uploaded : defaultGeo;
@@ -147,9 +152,12 @@ interface BridgeDistanceMeasurerProps {
 }
 
 const BRIDGE_DIRS = [
-  new THREE.Vector3( 1, 0, 0), new THREE.Vector3(-1, 0, 0),
-  new THREE.Vector3( 0, 1, 0), new THREE.Vector3( 0,-1, 0),
-  new THREE.Vector3( 0, 0, 1), new THREE.Vector3( 0, 0,-1),
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3(0, 1, 0),
+  new THREE.Vector3(0, -1, 0),
+  new THREE.Vector3(0, 0, 1),
+  new THREE.Vector3(0, 0, -1),
 ];
 
 function BridgeDistanceMeasurer({
@@ -157,19 +165,19 @@ function BridgeDistanceMeasurer({
   headMeshRef,
   onDistance,
 }: BridgeDistanceMeasurerProps) {
-  const rc         = useRef(new THREE.Raycaster());
+  const rc = useRef(new THREE.Raycaster());
   const frameCount = useRef(0);
-  const lastMm     = useRef<number | null>(null);
+  const lastMm = useRef<number | null>(null);
 
   rc.current.near = 0;
-  rc.current.far  = 2.0;
+  rc.current.far = 2.0;
 
   useFrame(() => {
     frameCount.current++;
     if (frameCount.current % 8 !== 0) return;
 
     const glasses = glassesMeshRef.current;
-    const head    = headMeshRef.current;
+    const head = headMeshRef.current;
     if (!glasses || !head) return;
 
     glasses.updateMatrixWorld(true);
@@ -184,7 +192,8 @@ function BridgeDistanceMeasurer({
     for (const dir of BRIDGE_DIRS) {
       rc.current.set(glassesCenter, dir);
       const hits = rc.current.intersectObject(head, false);
-      if (hits.length > 0 && hits[0].distance < minDist) minDist = hits[0].distance;
+      if (hits.length > 0 && hits[0].distance < minDist)
+        minDist = hits[0].distance;
     }
     const mm = isFinite(minDist) ? Math.round(minDist * 100 * 10) / 10 : null;
 
@@ -238,41 +247,98 @@ function SealGenerator({
     const sx = bb.max.x - bb.min.x;
     const sy = bb.max.y - bb.min.y;
     const sz = bb.max.z - bb.min.z;
+    // localFaceDir: the local axis with the shortest span is the face-depth axis.
+    // Used only to build alignMat so that face-depth maps to sliceGeo Z.
     const localFaceDir =
-      sz <= sx && sz <= sy ? new THREE.Vector3(0, 0, 1) :
-      sy <= sx             ? new THREE.Vector3(0, 1, 0) :
-                             new THREE.Vector3(1, 0, 0);
-    const faceNormal = localFaceDir.clone().transformDirection(glasses.matrixWorld).normalize();
+      sz <= sx && sz <= sy
+        ? new THREE.Vector3(0, 0, 1)
+        : sy <= sx
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(1, 0, 0);
 
     const headCenter = new THREE.Vector3();
     new THREE.Box3().setFromObject(head).getCenter(headCenter);
-    const glassesWorldCenter = new THREE.Vector3();
-    new THREE.Box3().setFromObject(glasses).getCenter(glassesWorldCenter);
-    const toHead = headCenter.clone().sub(glassesWorldCenter).normalize();
-    const correctedFaceNormal =
-      faceNormal.dot(toHead) >= 0
-        ? faceNormal.clone()
-        : faceNormal.clone().negate();
 
     const alignMat: THREE.Matrix4 | null = (() => {
       if (localFaceDir.z === 1) return null;
       if (localFaceDir.x === 1) {
         return sy >= sz
-          ? new THREE.Matrix4().set(0,1,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,1)
-          : new THREE.Matrix4().set(0,0,1,0, 0,1,0,0, 1,0,0,0, 0,0,0,1);
+          ? new THREE.Matrix4().set(
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+            )
+          : new THREE.Matrix4().set(
+              0,
+              0,
+              1,
+              0,
+              0,
+              1,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+            );
       }
       return sx >= sz
-        ? new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,1,0,0, 0,0,0,1)
-        : new THREE.Matrix4().set(0,0,1,0, 1,0,0,0, 0,1,0,0, 0,0,0,1);
+        ? new THREE.Matrix4().set(
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+          )
+        : new THREE.Matrix4().set(
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+          );
     })();
     const alignInv = alignMat ? alignMat.clone().invert() : null;
-
-    const toWorld = (localPts: THREE.Vector3[] | null): THREE.Vector3[] | null =>
-      localPts?.map((p) => {
-        const v = p.clone();
-        if (alignInv) v.applyMatrix4(alignInv);
-        return v.applyMatrix4(glasses.matrixWorld);
-      }) ?? null;
 
     const sliceGeo = alignMat
       ? (() => {
@@ -282,13 +348,56 @@ function SealGenerator({
           return g;
         })()
       : glasses.geometry;
-    const cnAligned = correctedFaceNormal.clone()
-      .transformDirection(glasses.matrixWorld.clone().invert());
-    if (alignMat) cnAligned.applyMatrix4(alignMat);
     sliceGeo.computeBoundingBox();
-    const faceSideZ = cnAligned.z >= 0
-      ? sliceGeo.boundingBox!.max.z
-      : sliceGeo.boundingBox!.min.z;
+
+    // Center sliceGeo X,Y so the slicer's centroidX < 0 / > 0 thresholds work
+    // regardless of where the model sits in its local coordinate space.
+    const sliceBB = sliceGeo.boundingBox!;
+    const centerOffset = new THREE.Vector3(
+      (sliceBB.min.x + sliceBB.max.x) / 2,
+      (sliceBB.min.y + sliceBB.max.y) / 2,
+      0,
+    );
+    sliceGeo.translate(-centerOffset.x, -centerOffset.y, 0);
+    sliceGeo.computeBoundingBox();
+
+    // Helper: convert a point in sliceGeo local coords to world space.
+    const toWorld = (
+      localPts: THREE.Vector3[] | null,
+    ): THREE.Vector3[] | null =>
+      localPts?.map((p) => {
+        const v = p.clone();
+        v.x += centerOffset.x;
+        v.y += centerOffset.y;
+        if (alignInv) v.applyMatrix4(alignInv);
+        return v.applyMatrix4(glasses.matrixWorld);
+      }) ?? null;
+
+    // Determine face-contact Z side geometrically: the Z extreme whose world-space
+    // midpoint is closer to the head is the face-contact (skin-side) surface.
+    // This avoids the fragile cnAligned dot-product approach which breaks when the
+    // local face-depth axis and the glasses→head vector are nearly perpendicular.
+    const bbMinZ = sliceGeo.boundingBox!.min.z;
+    const bbMaxZ = sliceGeo.boundingBox!.max.z;
+    const minPtWorld = toWorld([new THREE.Vector3(0, 0, bbMinZ)])![0];
+    const maxPtWorld = toWorld([new THREE.Vector3(0, 0, bbMaxZ)])![0];
+    const faceSideZ =
+      minPtWorld.distanceTo(headCenter) < maxPtWorld.distanceTo(headCenter)
+        ? bbMinZ
+        : bbMaxZ;
+
+    // correctedFaceNormal: unit vector pointing from the outer (viewer-facing) surface
+    // toward the face-contact surface — i.e., from glasses into the face.
+    const facePtWorld = faceSideZ === bbMinZ ? minPtWorld : maxPtWorld;
+    const otherPtWorld = faceSideZ === bbMinZ ? maxPtWorld : minPtWorld;
+    const correctedFaceNormal = facePtWorld
+      .clone()
+      .sub(otherPtWorld)
+      .normalize();
+
+    // cnAligned: face-contact direction in sliceGeo space — derived from faceSideZ
+    // so it's consistent with the geometric face-side detection above.
+    const cnAligned = new THREE.Vector3(0, 0, faceSideZ === bbMaxZ ? 1 : -1);
 
     const best = findBestSliceZ(sliceGeo, 0.5);
     let eyePaths = null;
@@ -299,21 +408,24 @@ function SealGenerator({
       eyePaths = extractPerEyeAggregate(sliceGeo, 120, 0.5, cnAligned);
     }
 
-    if (eyePaths && best?.quality !== "good" && !eyePaths.skipZRemap) {
+    if (eyePaths && !eyePaths.skipZRemap) {
       const remap = (path: THREE.Vector3[] | null) =>
         path?.map((p) => new THREE.Vector3(p.x, p.y, faceSideZ)) ?? null;
-      eyePaths = { leftPath: remap(eyePaths.leftPath), rightPath: remap(eyePaths.rightPath) };
+      eyePaths = {
+        leftPath: remap(eyePaths.leftPath),
+        rightPath: remap(eyePaths.rightPath),
+      };
     }
 
-    const leftWorld  = toWorld(eyePaths?.leftPath  ?? null);
+    const leftWorld = toWorld(eyePaths?.leftPath ?? null);
     const rightWorld = toWorld(eyePaths?.rightPath ?? null);
-    const sealNormal = best?.quality !== "good" ? correctedFaceNormal : faceNormal;
+    const sealNormal = correctedFaceNormal;
 
     if (!head.geometry.boundsTree) head.geometry.computeBoundsTree();
 
     const rc = new THREE.Raycaster();
     rc.near = 0.002;
-    rc.far  = 0.5;
+    rc.far = 0.5;
 
     // Raycast from each frame-edge point toward the face; interpolate misses.
     function getDepths(pts: THREE.Vector3[]): number[] {
@@ -325,39 +437,54 @@ function SealGenerator({
       });
       for (let i = 0; i < n; i++) {
         if (depths[i] >= 0) continue;
-        let lo = -1, hi = -1;
+        let lo = -1,
+          hi = -1;
         for (let step = 1; step < n; step++) {
-          if (lo < 0 && depths[(i - step + n) % n] >= 0) lo = (i - step + n) % n;
-          if (hi < 0 && depths[(i + step)     % n] >= 0) hi = (i + step) % n;
+          if (lo < 0 && depths[(i - step + n) % n] >= 0)
+            lo = (i - step + n) % n;
+          if (hi < 0 && depths[(i + step) % n] >= 0) hi = (i + step) % n;
           if (lo >= 0 && hi >= 0) break;
         }
-        if      (lo >= 0 && hi >= 0) { const dLo = (i - lo + n) % n, dHi = (hi - i + n) % n; depths[i] = (depths[lo] * dHi + depths[hi] * dLo) / (dLo + dHi); }
-        else if (lo >= 0)             depths[i] = depths[lo];
-        else if (hi >= 0)             depths[i] = depths[hi];
-        else                          depths[i] = 0.05;
+        if (lo >= 0 && hi >= 0) {
+          const dLo = (i - lo + n) % n,
+            dHi = (hi - i + n) % n;
+          depths[i] = (depths[lo] * dHi + depths[hi] * dLo) / (dLo + dHi);
+        } else if (lo >= 0) depths[i] = depths[lo];
+        else if (hi >= 0) depths[i] = depths[hi];
+        else depths[i] = 0.05;
       }
       return depths;
     }
 
-    function buildEdge(pts: THREE.Vector3[], depths: number[]): THREE.Vector3[] {
-      return pts.map((p, i) => p.clone().addScaledVector(correctedFaceNormal, depths[i] + 0.001));
+    function buildEdge(
+      pts: THREE.Vector3[],
+      depths: number[],
+    ): THREE.Vector3[] {
+      return pts.map((p, i) =>
+        p.clone().addScaledVector(correctedFaceNormal, depths[i] + 0.001),
+      );
     }
 
-    const leftDepths  = leftWorld  ? getDepths(leftWorld)  : null;
+    const leftDepths = leftWorld ? getDepths(leftWorld) : null;
     const rightDepths = rightWorld ? getDepths(rightWorld) : null;
 
     if (symmetrize && leftDepths && rightDepths) {
       // Equalize the mean depth between the two sides so a tilted frame or
       // slightly asymmetric scan doesn't produce wildly different seal heights.
-      const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-      const lm = mean(leftDepths), rm = mean(rightDepths);
+      const mean = (arr: number[]) =>
+        arr.reduce((s, v) => s + v, 0) / arr.length;
+      const lm = mean(leftDepths),
+        rm = mean(rightDepths);
       const target = (lm + rm) / 2;
-      for (let i = 0; i < leftDepths.length;  i++) leftDepths[i]  += target - lm;
-      for (let i = 0; i < rightDepths.length; i++) rightDepths[i] += target - rm;
+      for (let i = 0; i < leftDepths.length; i++) leftDepths[i] += target - lm;
+      for (let i = 0; i < rightDepths.length; i++)
+        rightDepths[i] += target - rm;
     }
 
-    const leftEdge  = leftWorld  && leftDepths  ? buildEdge(leftWorld,  leftDepths)  : null;
-    const rightEdge = rightWorld && rightDepths ? buildEdge(rightWorld, rightDepths) : null;
+    const leftEdge =
+      leftWorld && leftDepths ? buildEdge(leftWorld, leftDepths) : null;
+    const rightEdge =
+      rightWorld && rightDepths ? buildEdge(rightWorld, rightDepths) : null;
 
     let sealGeometry = eyePaths
       ? generateDualSeal(leftWorld, rightWorld, sealNormal, leftEdge, rightEdge)
@@ -372,11 +499,17 @@ function SealGenerator({
       const wUp = new THREE.Vector3(0, 1, 0);
       wUp.addScaledVector(correctedFaceNormal, -wUp.dot(correctedFaceNormal));
       if (wUp.lengthSq() < 0.01)
-        wUp.set(0, 0, 1).addScaledVector(correctedFaceNormal, -correctedFaceNormal.z);
+        wUp
+          .set(0, 0, 1)
+          .addScaledVector(correctedFaceNormal, -correctedFaceNormal.z);
       wUp.normalize();
-      const wRight = new THREE.Vector3().crossVectors(wUp, correctedFaceNormal).normalize();
+      const wRight = new THREE.Vector3()
+        .crossVectors(wUp, correctedFaceNormal)
+        .normalize();
 
-      let halfW = 0, halfH = 0, maxFace = -Infinity;
+      let halfW = 0,
+        halfH = 0,
+        maxFace = -Infinity;
       for (let i = 0; i < 8; i++) {
         const c = new THREE.Vector3(
           i & 1 ? worldBox.max.x : worldBox.min.x,
@@ -389,19 +522,27 @@ function SealGenerator({
         maxFace = Math.max(maxFace, c.dot(correctedFaceNormal));
       }
 
-      const faceOrigin = worldCenter.clone().addScaledVector(
-        correctedFaceNormal,
-        maxFace - worldCenter.dot(correctedFaceNormal),
+      const faceOrigin = worldCenter
+        .clone()
+        .addScaledVector(
+          correctedFaceNormal,
+          maxFace - worldCenter.dot(correctedFaceNormal),
+        );
+      const worldPath = generateWorldSealPath(
+        faceOrigin,
+        wRight,
+        wUp,
+        halfW,
+        halfH,
       );
-      const worldPath = generateWorldSealPath(faceOrigin, wRight, wUp, halfW, halfH);
       sealGeometry = generateSeal(worldPath, correctedFaceNormal);
     }
 
     const rawEdges: SealRawEdges = {
-      leftPath:   leftWorld,
-      rightPath:  rightWorld,
-      leftFace:   leftEdge,
-      rightFace:  rightEdge,
+      leftPath: leftWorld,
+      rightPath: rightWorld,
+      leftFace: leftEdge,
+      rightFace: rightEdge,
       faceNormal: correctedFaceNormal,
     };
 
@@ -445,52 +586,56 @@ interface FineCenters {
 export default function ModelPreview() {
   const navigate = useNavigate();
 
-  const selectedFrame        = useAppStore((s) => s.selectedFrame);
-  const userScan             = useAppStore((s) => s.userScan);
-  const glassesPosition      = useAppStore((s) => s.glassesPosition);
-  const glassesRotation      = useAppStore((s) => s.glassesRotation);
-  const glassesScale         = useAppStore((s) => s.glassesScale);
-  const headRotation         = useAppStore((s) => s.headRotation);
-  const setGlassesPosition   = useAppStore((s) => s.setGlassesPosition);
-  const setGlassesRotation   = useAppStore((s) => s.setGlassesRotation);
-  const setGlassesScale      = useAppStore((s) => s.setGlassesScale);
-  const setHeadRotation      = useAppStore((s) => s.setHeadRotation);
-  const resetAlignment       = useAppStore((s) => s.resetAlignment);
-  const setHardpoints        = useAppStore((s) => s.setHardpoints);
-  const setGeneratedSeal     = useAppStore((s) => s.setGeneratedSeal);
-  const setSealRawEdges      = useAppStore((s) => s.setSealRawEdges);
-  const generatedSeal        = useAppStore((s) => s.generatedSeal);
-  const hardpoints           = useAppStore((s) => s.hardpoints);
+  const selectedFrame = useAppStore((s) => s.selectedFrame);
+  const userScan = useAppStore((s) => s.userScan);
+  const glassesPosition = useAppStore((s) => s.glassesPosition);
+  const glassesRotation = useAppStore((s) => s.glassesRotation);
+  const glassesScale = useAppStore((s) => s.glassesScale);
+  const headRotation = useAppStore((s) => s.headRotation);
+  const setGlassesPosition = useAppStore((s) => s.setGlassesPosition);
+  const setGlassesRotation = useAppStore((s) => s.setGlassesRotation);
+  const setGlassesScale = useAppStore((s) => s.setGlassesScale);
+  const setHeadRotation = useAppStore((s) => s.setHeadRotation);
+  const resetAlignment = useAppStore((s) => s.resetAlignment);
+  const setHardpoints = useAppStore((s) => s.setHardpoints);
+  const setGeneratedSeal = useAppStore((s) => s.setGeneratedSeal);
+  const setSealRawEdges = useAppStore((s) => s.setSealRawEdges);
+  const generatedSeal = useAppStore((s) => s.generatedSeal);
+  const sealRawEdges = useAppStore((s) => s.sealRawEdges);
+  const hardpoints = useAppStore((s) => s.hardpoints);
   const triggerSealGeneration = useAppStore((s) => s.triggerSealGeneration);
 
-  const [glassesFile, setGlassesFile]       = useState<File | null>(null);
+  const [glassesFile, setGlassesFile] = useState<File | null>(null);
   const [showHardpoints, setShowHardpoints] = useState(false);
-  const [fineMode, setFineMode]             = useState(false);
-  const [fineCenters, setFineCenters]       = useState<FineCenters | null>(null);
-  const [stlBboxWidth, setStlBboxWidth]     = useState<number | null>(null);
-  const [bridgeDistMm, setBridgeDistMm]     = useState<number | null>(null);
-  const [loadError, setLoadError]           = useState<string | null>(null);
-  const [symmetrize, setSymmetrize]         = useState(false);
+  const [fineMode, setFineMode] = useState(false);
+  const [fineCenters, setFineCenters] = useState<FineCenters | null>(null);
+  const [stlBboxWidth, setStlBboxWidth] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [symmetrize, setSymmetrize] = useState(false);
 
   const glassesMeshRef = useRef<THREE.Mesh>(null);
-  const headMeshRef    = useRef<THREE.Mesh>(null);
+  const headMeshRef = useRef<THREE.Mesh>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const orbitRef       = useRef<any>(null);
+  const orbitRef = useRef<any>(null);
 
   if (!selectedFrame) return <Navigate to="/frames" replace />;
 
   // Frame width in mm derived from STL geometry width × applied scale × 100
-  const frameWidthMm = stlBboxWidth !== null
-    ? Math.round(stlBboxWidth * glassesScale * 100)
-    : null;
+  const frameWidthMm =
+    stlBboxWidth !== null
+      ? Math.round(stlBboxWidth * glassesScale * 100)
+      : null;
 
   const slug = selectedFrame.name.toLowerCase().replace(/\s+/g, "-");
 
-  const snapView = (pos: [number, number, number]) => {
+  const snapView = (
+    pos: [number, number, number],
+    target: [number, number, number] = [0, 0, 0.3],
+  ) => {
     const ctrl = orbitRef.current;
     if (!ctrl) return;
     ctrl.object.position.set(...pos);
-    ctrl.target.set(0, 0, 0.3);
+    ctrl.target.set(...target);
     ctrl.update();
   };
 
@@ -503,25 +648,28 @@ export default function ModelPreview() {
 
     // ── Position ────────────────────────────────────────────────────────────
     // Coordinate system: Z is up, Y is front (face points toward +Y), X is left-right.
-    const headBox     = new THREE.Box3().setFromObject(head);
+    const headBox = new THREE.Box3().setFromObject(head);
     const headCenterX = (headBox.min.x + headBox.max.x) / 2;
-    const headHeight  = headBox.max.z - headBox.min.z; // height along Z
+    const headHeight = headBox.max.z - headBox.min.z; // height along Z
 
     const rc = new THREE.Raycaster();
     rc.near = 0;
-    rc.far  = 30;
+    rc.far = 30;
 
     // Sweep 14 rays from 48% to 76% of head height (Z) to find the nose tip —
     // the most-forward (highest world-Y) point on the face centre-line.
-    let noseFwdY    = -Infinity;
+    let noseFwdY = -Infinity;
     let noseHeightZ = headBox.min.z + headHeight * 0.65; // fallback
     for (let i = 0; i < 14; i++) {
-      const t       = 0.48 + (i / 13) * 0.28;
+      const t = 0.48 + (i / 13) * 0.28;
       const sampleZ = headBox.min.z + headHeight * t;
-      rc.set(new THREE.Vector3(headCenterX, 15, sampleZ), new THREE.Vector3(0, -1, 0));
+      rc.set(
+        new THREE.Vector3(headCenterX, 15, sampleZ),
+        new THREE.Vector3(0, -1, 0),
+      );
       const hits = rc.intersectObject(head, false);
       if (hits.length > 0 && hits[0].point.y > noseFwdY) {
-        noseFwdY    = hits[0].point.y;
+        noseFwdY = hits[0].point.y;
         noseHeightZ = sampleZ;
       }
     }
@@ -529,7 +677,10 @@ export default function ModelPreview() {
 
     // The glasses bridge sits above the nose tip. Step up ~5% of head height.
     const bridgeHeightZ = noseHeightZ + headHeight * 0.05;
-    rc.set(new THREE.Vector3(headCenterX, 15, bridgeHeightZ), new THREE.Vector3(0, -1, 0));
+    rc.set(
+      new THREE.Vector3(headCenterX, 15, bridgeHeightZ),
+      new THREE.Vector3(0, -1, 0),
+    );
     const bridgeHits = rc.intersectObject(head, false);
     const bridgeFwdY = bridgeHits.length > 0 ? bridgeHits[0].point.y : noseFwdY;
 
@@ -542,17 +693,61 @@ export default function ModelPreview() {
     setGlassesRotation([...DEFAULT_GLASSES_ROTATION]);
   };
 
-  const handlePLADownload = () => {
-    if (!generatedSeal) return;
-    const geo = generatedSeal.clone();
-    geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
-    // Flip 180° around X so the face-contact side faces down toward the print bed.
-    geo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI));
-    // Translate so the lowest point sits at Z = 0.
-    geo.computeBoundingBox();
-    const minZ = geo.boundingBox?.min.z ?? 0;
-    if (minZ !== 0) geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
-    exportSTL(geo, `seal-${slug}-pla.stl`);
+  const handleMultiDownload = () => {
+    if (!generatedSeal || !sealRawEdges) return;
+    const { leftPath, rightPath, leftFace, rightFace, faceNormal } =
+      sealRawEdges;
+
+    const prepareGeo = (geo: THREE.BufferGeometry): THREE.BufferGeometry => {
+      geo.applyMatrix4(new THREE.Matrix4().makeScale(100, 100, 100));
+      // Rotate so the face-contact end (in +faceNormal direction) faces the print bed.
+      // Using setFromUnitVectors rather than a hardcoded rotateX so it works for any
+      // glasses orientation, not just the default model's axis alignment.
+      const printRot = new THREE.Quaternion().setFromUnitVectors(
+        faceNormal.clone().normalize(),
+        new THREE.Vector3(0, 0, -1),
+      );
+      geo.applyMatrix4(
+        new THREE.Matrix4().makeRotationFromQuaternion(printRot),
+      );
+      geo.computeBoundingBox();
+      const minZ = geo.boundingBox?.min.z ?? 0;
+      if (minZ !== 0)
+        geo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, -minZ));
+      return geo;
+    };
+
+    const exportVariant = (offsetMm: number, suffix: string) => {
+      let geo: THREE.BufferGeometry | null;
+
+      if (offsetMm === 0 || (!leftPath && !rightPath)) {
+        geo = generatedSeal.clone();
+      } else {
+        // Shift only the glasses-contact edge by offsetMm along the face normal,
+        // keeping the face-contact edge fixed. This changes the seal depth the same
+        // way moving the glasses forward/back would — positive offset pushes the
+        // glasses edge toward the face (shallower seal), negative pulls it away
+        // (deeper seal).
+        const shift = offsetMm * 0.01; // mm → world units
+        const sv = faceNormal.clone().normalize().multiplyScalar(shift);
+        const shiftPath = (pts: THREE.Vector3[] | null) =>
+          pts?.map((p) => p.clone().add(sv)) ?? null;
+        geo = generateDualSeal(
+          shiftPath(leftPath),
+          shiftPath(rightPath),
+          faceNormal,
+          leftFace,
+          rightFace,
+        );
+      }
+
+      if (!geo) return;
+      exportSTL(prepareGeo(geo), `seal-${slug}${suffix}.stl`);
+    };
+
+    exportVariant(0, "");
+    exportVariant(+2, "-shallow"); // glasses 2 mm closer → shorter seal
+    exportVariant(-2, "-deep"); // glasses 2 mm farther → taller seal
   };
 
   const handleGlassesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -620,9 +815,10 @@ export default function ModelPreview() {
 
   type AxisKey = "x" | "y" | "z";
 
-  const posControls: Array<[string, AxisKey, number, number]> = [
-    ["Up/Down",      "x", glassesPosition[0], DEFAULT_GLASSES_POSITION[0]],
-    ["Left/Right",   "y", glassesPosition[1], DEFAULT_GLASSES_POSITION[1]],
+  // tuple: [label, axis, value, default, invertSlider?]
+  const posControls: Array<[string, AxisKey, number, number, boolean?]> = [
+    ["Up/Down", "x", glassesPosition[0], DEFAULT_GLASSES_POSITION[0]],
+    ["Left/Right", "y", glassesPosition[1], DEFAULT_GLASSES_POSITION[1], true],
     ["Forward/Back", "z", glassesPosition[2], DEFAULT_GLASSES_POSITION[2]],
   ];
 
@@ -640,15 +836,26 @@ export default function ModelPreview() {
   return (
     <div className="model-preview">
       <div className="page-header">
-        <Button variant="back" onClick={() => navigate(userScan ? "/scan" : "/fit-type")}>
+        <Button
+          variant="back"
+          onClick={() => navigate(userScan ? "/scan" : "/fit-type")}
+        >
           ← Back
         </Button>
         <h2 className="page-header__title">Position Your Glasses</h2>
         <p className="page-header__subtitle">
           {userScan ? (
-            <>Scan loaded: <span className="page-header__selected">{userScan.name}</span></>
+            <>
+              Scan loaded:{" "}
+              <span className="page-header__selected">{userScan.name}</span>
+            </>
           ) : (
-            <>Selected frame: <span className="page-header__selected">{selectedFrame?.name}</span></>
+            <>
+              Selected frame:{" "}
+              <span className="page-header__selected">
+                {selectedFrame?.name}
+              </span>
+            </>
           )}
         </p>
       </div>
@@ -656,31 +863,65 @@ export default function ModelPreview() {
       <div className="alignment-tips">
         <div className="alignment-tips__item">
           <span className="alignment-tips__icon">📷</span>
-          <span>Before aligning: take front and side photos of yourself <em>wearing</em> these glasses — use them as a reference while adjusting.</span>
+          <span>
+            Before aligning: take front and side photos of yourself{" "}
+            <em>wearing</em> these glasses — use them as a reference while
+            adjusting.
+          </span>
         </div>
         <div className="alignment-tips__item">
           <span className="alignment-tips__icon">🖨️</span>
-          <span>Pro tip: export 2–3 versions with the <strong>Forward/Back</strong> slider at slightly different positions (e.g. −0.01, current, +0.01) and test-print them all — small differences in fit matter for sealing.</span>
+          <span>
+            Pro tip: export 2–3 versions with the <strong>Forward/Back</strong>{" "}
+            slider at slightly different positions (e.g. −0.01, current, +0.01)
+            and test-print them all — small differences in fit matter for
+            sealing.
+          </span>
         </div>
       </div>
 
       <div className="model-preview__container">
         <div className="model-preview__viewer">
           <div className="view-snap">
-            {([
-              ["F",  [0,    7.5,  0.3]],
-              ["B",  [0,   -7.5,  0.3]],
-              ["L",  [-7.5, 0,    0.3]],
-              ["R",  [7.5,  0,    0.3]],
-              ["T",  [0,    0,    7.5]],
-            ] as [string, [number,number,number]][]).map(([label, pos]) => (
-              <button key={label} className="view-snap__btn" onClick={() => snapView(pos)} title={
-                label === "F" ? "Front" : label === "B" ? "Back" :
-                label === "L" ? "Left"  : label === "R" ? "Right" : "Top"
-              }>{label}</button>
+            {(
+              [
+                ["F", [0, 2.1, 0.45], [0, 0, 0.38]],
+                ["B", [0, -7.5, 0.3], [0, 0, 0.3]],
+                ["L", [-7.5, 0, 0.3], [0, 0, 0.3]],
+                ["R", [7.5, 0, 0.3], [0, 0, 0.3]],
+                ["T", [0, 0, 7.5], [0, 0, 0.3]],
+              ] as [
+                string,
+                [number, number, number],
+                [number, number, number],
+              ][]
+            ).map(([label, pos, target]) => (
+              <button
+                key={label}
+                className="view-snap__btn"
+                onClick={() => snapView(pos, target)}
+                title={
+                  label === "F"
+                    ? "Front (close-up)"
+                    : label === "B"
+                      ? "Back"
+                      : label === "L"
+                        ? "Left"
+                        : label === "R"
+                          ? "Right"
+                          : "Top"
+                }
+              >
+                {label}
+              </button>
             ))}
           </div>
-          <SceneCanvas cameraPosition={[0, 7.5, 0]} controlsRef={orbitRef} showGizmo zUp>
+          <SceneCanvas
+            cameraPosition={[0, 7.5, 0]}
+            controlsRef={orbitRef}
+            showGizmo
+            zUp
+          >
             <group rotation={[Math.PI / 2, 0, -Math.PI / 2]}>
               <HeadModel
                 scanFile={userScan}
@@ -706,17 +947,16 @@ export default function ModelPreview() {
               glassesMeshRef={glassesMeshRef}
               headMeshRef={headMeshRef}
               symmetrize={symmetrize}
-              onSealGenerated={({ worldHardpoints, sealGeometry, rawEdges }) => {
+              onSealGenerated={({
+                worldHardpoints,
+                sealGeometry,
+                rawEdges,
+              }) => {
                 useAppStore.getState().generatedSeal?.dispose();
                 setHardpoints(worldHardpoints);
                 setGeneratedSeal(sealGeometry);
                 setSealRawEdges(rawEdges);
               }}
-            />
-            <BridgeDistanceMeasurer
-              glassesMeshRef={glassesMeshRef}
-              headMeshRef={headMeshRef}
-              onDistance={setBridgeDistMm}
             />
           </SceneCanvas>
           <p className="model-preview__instructions">
@@ -737,11 +977,18 @@ export default function ModelPreview() {
             <h4 className="control-group__label">Glasses Model</h4>
             {glassesFile ? (
               <div className="glasses-upload__loaded">
-                <span className="glasses-upload__filename">{glassesFile.name}</span>
+                <span className="glasses-upload__filename">
+                  {glassesFile.name}
+                </span>
                 <button
                   className="glasses-upload__remove"
-                  onClick={() => { setGlassesFile(null); resetAlignment(); }}
-                >✕</button>
+                  onClick={() => {
+                    setGlassesFile(null);
+                    resetAlignment();
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ) : (
               <label className="glasses-upload__button">
@@ -758,7 +1005,10 @@ export default function ModelPreview() {
           </div>
 
           {glassesFile && (
-            <button className="controls__auto-orient" onClick={handleAutoOrient}>
+            <button
+              className="controls__auto-orient"
+              onClick={handleAutoOrient}
+            >
               ⊕ Auto-Orient Glasses
             </button>
           )}
@@ -767,33 +1017,67 @@ export default function ModelPreview() {
             <h4 className="control-group__label">Head Orientation</h4>
             {headControls.map(([label, axis, val, def]) => {
               const { min: minRad, max: maxRad } = getRange(
-                -Math.PI, Math.PI, fineCenters?.head[axisIdx[axis]] ?? val, FINE_HALF_ROT,
+                -Math.PI,
+                Math.PI,
+                fineCenters?.head[axisIdx[axis]] ?? val,
+                FINE_HALF_ROT,
               );
               const step = fineMode ? "0.5" : "1";
+              const degStep = parseFloat(step);
               const degVal = parseFloat((val * DEG).toFixed(1));
               return (
                 <div className="control-row" key={axis}>
                   <div className="control">
                     <span className="control__label">{label}</span>
+                    <button
+                      className="control__nudge"
+                      onClick={() =>
+                        handleHeadRotationChange(axis, val - degStep * RAD)
+                      }
+                    >
+                      −
+                    </button>
                     <input
                       type="range"
-                      min={Math.round(minRad * DEG)} max={Math.round(maxRad * DEG)} step={step}
+                      min={Math.round(minRad * DEG)}
+                      max={Math.round(maxRad * DEG)}
+                      step={step}
                       value={degVal}
-                      onChange={(e) => handleHeadRotationChange(axis, parseFloat(e.target.value) * RAD)}
+                      onChange={(e) =>
+                        handleHeadRotationChange(
+                          axis,
+                          parseFloat(e.target.value) * RAD,
+                        )
+                      }
                       className="control__slider"
                     />
+                    <button
+                      className="control__nudge"
+                      onClick={() =>
+                        handleHeadRotationChange(axis, val + degStep * RAD)
+                      }
+                    >
+                      +
+                    </button>
                     <input
                       type="number"
                       value={degVal}
                       step={step}
-                      onChange={(e) => handleHeadRotationChange(axis, parseFloat(e.target.value) * RAD)}
+                      onChange={(e) =>
+                        handleHeadRotationChange(
+                          axis,
+                          parseFloat(e.target.value) * RAD,
+                        )
+                      }
                       className="control__number"
                     />
                     <button
                       className="control__reset-field"
                       title="Reset to default"
                       onClick={() => handleHeadRotationChange(axis, def)}
-                    >↺</button>
+                    >
+                      ↺
+                    </button>
                   </div>
                 </div>
               );
@@ -802,44 +1086,61 @@ export default function ModelPreview() {
 
           <div className="control-group">
             <h4 className="control-group__label">Glasses Position</h4>
-            {posControls.map(([label, axis, val, def]) => {
-              const { min, max } = getRange(-2, 2, fineCenters?.pos[axisIdx[axis]] ?? val, 0.25);
+            {posControls.map(([label, axis, val, def, invert]) => {
+              const { min, max } = getRange(
+                -2,
+                2,
+                fineCenters?.pos[axisIdx[axis]] ?? val,
+                0.25,
+              );
               const step = fineMode ? "0.001" : "0.005";
+              const posStep = parseFloat(step);
+              // invertSlider: flip slider direction so visual left = world left
+              const s = invert ? -1 : 1;
+              const setPos = (displayed: number) =>
+                handlePositionChange(axis, displayed * s);
               return (
                 <div className="control-row" key={axis}>
                   <div className="control">
                     <span className="control__label">{label}</span>
+                    <button
+                      className="control__nudge"
+                      onClick={() => setPos(val * s - posStep)}
+                    >
+                      −
+                    </button>
                     <input
                       type="range"
-                      min={min} max={max} step={step}
-                      value={val}
-                      onChange={(e) => handlePositionChange(axis, parseFloat(e.target.value))}
+                      min={s > 0 ? min : -max}
+                      max={s > 0 ? max : -min}
+                      step={step}
+                      value={val * s}
+                      onChange={(e) => setPos(parseFloat(e.target.value))}
                       className="control__slider"
                     />
+                    <button
+                      className="control__nudge"
+                      onClick={() => setPos(val * s + posStep)}
+                    >
+                      +
+                    </button>
                     <input
                       type="number"
                       value={parseFloat(val.toFixed(3))}
                       step={step}
-                      onChange={(e) => handlePositionChange(axis, parseFloat(e.target.value))}
+                      onChange={(e) =>
+                        handlePositionChange(axis, parseFloat(e.target.value))
+                      }
                       className="control__number"
                     />
                     <button
                       className="control__reset-field"
                       title="Reset to default"
                       onClick={() => handlePositionChange(axis, def)}
-                    >↺</button>
+                    >
+                      ↺
+                    </button>
                   </div>
-                  {axis === "z" && (
-                    <p className="control__subtext">
-                      Nose bridge gap:{" "}
-                      {bridgeDistMm !== null
-                        ? <><strong>{bridgeDistMm} mm</strong>
-                            {bridgeDistMm > 4 ? " — may be too far" : " — good (0–4 mm is normal)"}
-                          </>
-                        : <em>measuring…</em>
-                      }
-                    </p>
-                  )}
                 </div>
               );
             })}
@@ -849,33 +1150,67 @@ export default function ModelPreview() {
             <h4 className="control-group__label">Glasses Rotation</h4>
             {rotControls.map(([label, axis, val, def]) => {
               const { min: minRad, max: maxRad } = getRange(
-                0, Math.PI * 2, fineCenters?.rot[axisIdx[axis]] ?? val, FINE_HALF_ROT,
+                0,
+                Math.PI * 2,
+                fineCenters?.rot[axisIdx[axis]] ?? val,
+                FINE_HALF_ROT,
               );
               const step = fineMode ? "0.5" : "1";
+              const degStep = parseFloat(step);
               const degVal = parseFloat((val * DEG).toFixed(1));
               return (
                 <div className="control-row" key={axis}>
                   <div className="control">
                     <span className="control__label">{label}</span>
+                    <button
+                      className="control__nudge"
+                      onClick={() =>
+                        handleRotationChange(axis, val - degStep * RAD)
+                      }
+                    >
+                      −
+                    </button>
                     <input
                       type="range"
-                      min={Math.round(minRad * DEG)} max={Math.round(maxRad * DEG)} step={step}
+                      min={Math.round(minRad * DEG)}
+                      max={Math.round(maxRad * DEG)}
+                      step={step}
                       value={degVal}
-                      onChange={(e) => handleRotationChange(axis, parseFloat(e.target.value) * RAD)}
+                      onChange={(e) =>
+                        handleRotationChange(
+                          axis,
+                          parseFloat(e.target.value) * RAD,
+                        )
+                      }
                       className="control__slider"
                     />
+                    <button
+                      className="control__nudge"
+                      onClick={() =>
+                        handleRotationChange(axis, val + degStep * RAD)
+                      }
+                    >
+                      +
+                    </button>
                     <input
                       type="number"
                       value={degVal}
                       step={step}
-                      onChange={(e) => handleRotationChange(axis, parseFloat(e.target.value) * RAD)}
+                      onChange={(e) =>
+                        handleRotationChange(
+                          axis,
+                          parseFloat(e.target.value) * RAD,
+                        )
+                      }
                       className="control__number"
                     />
                     <button
                       className="control__reset-field"
                       title="Reset to default"
                       onClick={() => handleRotationChange(axis, def)}
-                    >↺</button>
+                    >
+                      ↺
+                    </button>
                   </div>
                 </div>
               );
@@ -886,30 +1221,58 @@ export default function ModelPreview() {
             <h4 className="control-group__label">
               Frame Scale
               {frameWidthMm !== null && (
-                <span className="control-group__label-sub"> — {frameWidthMm} mm wide</span>
+                <span className="control-group__label-sub">
+                  {" "}
+                  — {frameWidthMm} mm wide
+                </span>
               )}
             </h4>
             <div className="control-row">
               <div className="control">
                 <span className="control__label">Width (mm)</span>
                 {(() => {
-                  const minMm = 80, maxMm = 200;
+                  const minMm = 80,
+                    maxMm = 200;
                   const stepMm = fineMode ? "0.1" : "1";
+                  const mmStep = parseFloat(stepMm);
+                  const currentMm =
+                    frameWidthMm ??
+                    Math.round((glassesScale / DEFAULT_GLASSES_SCALE) * 147);
                   return (
                     <>
+                      <button
+                        className="control__nudge"
+                        disabled={stlBboxWidth === null}
+                        onClick={() => handleWidthMmChange(currentMm - mmStep)}
+                      >
+                        −
+                      </button>
                       <input
                         type="range"
-                        min={minMm} max={maxMm} step={stepMm}
-                        value={frameWidthMm ?? Math.round(glassesScale / DEFAULT_GLASSES_SCALE * 147)}
-                        onChange={(e) => handleWidthMmChange(parseFloat(e.target.value))}
+                        min={minMm}
+                        max={maxMm}
+                        step={stepMm}
+                        value={currentMm}
+                        onChange={(e) =>
+                          handleWidthMmChange(parseFloat(e.target.value))
+                        }
                         className="control__slider"
                         disabled={stlBboxWidth === null}
                       />
+                      <button
+                        className="control__nudge"
+                        disabled={stlBboxWidth === null}
+                        onClick={() => handleWidthMmChange(currentMm + mmStep)}
+                      >
+                        +
+                      </button>
                       <input
                         type="number"
                         value={frameWidthMm ?? "—"}
                         step={stepMm}
-                        onChange={(e) => handleWidthMmChange(parseFloat(e.target.value))}
+                        onChange={(e) =>
+                          handleWidthMmChange(parseFloat(e.target.value))
+                        }
                         className="control__number"
                         disabled={stlBboxWidth === null}
                       />
@@ -920,10 +1283,13 @@ export default function ModelPreview() {
                   className="control__reset-field"
                   title="Reset to default"
                   onClick={() => setGlassesScale(DEFAULT_GLASSES_SCALE)}
-                >↺</button>
+                >
+                  ↺
+                </button>
               </div>
               <p className="control__subtext">
-                Scale is auto-computed from your STL dimensions — only adjust if you know the size is wrong.
+                Scale is auto-computed from your STL dimensions — only adjust if
+                you know the size is wrong.
               </p>
             </div>
           </div>
@@ -936,7 +1302,7 @@ export default function ModelPreview() {
               onClick={toggleFine}
               className={`controls__toggle ${fineMode ? "controls__toggle--active" : ""}`}
             >
-              {fineMode ? "Fine" : "Coarse"}
+              {fineMode ? "Fine" : "Normal"}
             </button>
             <button
               onClick={() => setShowHardpoints((v) => !v)}
@@ -947,7 +1313,10 @@ export default function ModelPreview() {
           </div>
 
           <div className="controls__seal-row">
-            <button onClick={triggerSealGeneration} className="controls__generate">
+            <button
+              onClick={triggerSealGeneration}
+              className="controls__generate"
+            >
               Generate Seal Preview
             </button>
             {userScan && (
@@ -962,10 +1331,13 @@ export default function ModelPreview() {
           </div>
 
           {generatedSeal && (
-            <div className="controls__downloads">
-              <button className="controls__download-btn controls__download-btn--pla" onClick={handlePLADownload}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button
+                className="controls__download-btn controls__download-btn--pla"
+                onClick={handleMultiDownload}
+              >
                 <Download size={15} />
-                Download PLA
+                Download Seal (3 variants)
               </button>
             </div>
           )}
