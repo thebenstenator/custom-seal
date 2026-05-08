@@ -143,68 +143,6 @@ function HardpointMarkers({ points }: HardpointMarkersProps) {
   );
 }
 
-// Continuously raycasts from the glasses nose-bridge area toward the head
-// and reports the gap distance in mm via the callback.
-interface BridgeDistanceMeasurerProps {
-  glassesMeshRef: React.RefObject<THREE.Mesh | null>;
-  headMeshRef: React.RefObject<THREE.Mesh | null>;
-  onDistance: (mm: number | null) => void;
-}
-
-const BRIDGE_DIRS = [
-  new THREE.Vector3(1, 0, 0),
-  new THREE.Vector3(-1, 0, 0),
-  new THREE.Vector3(0, 1, 0),
-  new THREE.Vector3(0, -1, 0),
-  new THREE.Vector3(0, 0, 1),
-  new THREE.Vector3(0, 0, -1),
-];
-
-function BridgeDistanceMeasurer({
-  glassesMeshRef,
-  headMeshRef,
-  onDistance,
-}: BridgeDistanceMeasurerProps) {
-  const rc = useRef(new THREE.Raycaster());
-  const frameCount = useRef(0);
-  const lastMm = useRef<number | null>(null);
-
-  rc.current.near = 0;
-  rc.current.far = 2.0;
-
-  useFrame(() => {
-    frameCount.current++;
-    if (frameCount.current % 8 !== 0) return;
-
-    const glasses = glassesMeshRef.current;
-    const head = headMeshRef.current;
-    if (!glasses || !head) return;
-
-    glasses.updateMatrixWorld(true);
-    head.updateMatrixWorld(true);
-
-    const glassesCenter = new THREE.Vector3();
-    new THREE.Box3().setFromObject(glasses).getCenter(glassesCenter);
-
-    // Cast in all 6 cardinal directions; closest hit is the nearest head surface.
-    // This avoids the head-center-direction issue when the neck lowers the bbox centroid.
-    let minDist = Infinity;
-    for (const dir of BRIDGE_DIRS) {
-      rc.current.set(glassesCenter, dir);
-      const hits = rc.current.intersectObject(head, false);
-      if (hits.length > 0 && hits[0].distance < minDist)
-        minDist = hits[0].distance;
-    }
-    const mm = isFinite(minDist) ? Math.round(minDist * 100 * 10) / 10 : null;
-
-    if (mm !== lastMm.current) {
-      lastMm.current = mm;
-      onDistance(mm);
-    }
-  });
-
-  return null;
-}
 
 interface SealGeneratorResult {
   worldHardpoints: THREE.Vector3[];
