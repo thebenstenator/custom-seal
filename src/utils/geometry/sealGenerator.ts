@@ -90,7 +90,7 @@ export function flattenEdgesForTPU(
 
 export const SEAL_DEPTH    = 0.05;  // fallback flat depth (5 mm at 0.01 scale)
 const WALL_THICKNESS       = 0.009; // 0.9 mm body thickness
-const FLANGE_THICKNESS     = 0.035; // 3.5 mm mating flange thickness (fits 3 mm disc magnets)
+const FLANGE_THICKNESS     = 0.030; // 3.0 mm mating flange thickness (fits 2 mm disc magnets)
 const FLANGE_DEPTH         = 0.020; // 2.0 mm flange height (from glasses contact face)
 
 // Builds a seal band with an upside-down-T cross section:
