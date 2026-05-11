@@ -7,7 +7,7 @@ import SceneCanvas from "../shared/SceneCanvas";
 import Button from "../shared/Button";
 import "./FrameDownload.css";
 
-const KOFI_URL = "https://ko-fi.com/YOUR_KOFI_USERNAME";
+const KOFI_URL = "https://ko-fi.com/customseal";
 
 function SealPreview({ url }: { url: string }) {
   const geometry = useSTLModel(url);
