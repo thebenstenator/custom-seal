@@ -1,5 +1,5 @@
 import { useNavigate, Navigate } from "react-router-dom";
-import { ScanFace, Shapes } from "lucide-react";
+import { ScanFace, Shapes, Download } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import Button from "../shared/Button";
 import "./FitType.css";
@@ -30,6 +30,27 @@ export default function FitType() {
           <span className="page-header__selected">{selectedFrame.name}</span>
         </p>
       </div>
+
+      {/* Ready-made seal — shown only when a hand-tuned STL exists for this frame */}
+      {selectedFrame.genericSealUrl && (
+        <button className="fit-card fit-card--active fit-card--featured" onClick={() => navigate("/ready-made")}>
+          <div className="fit-card__featured-badge">Ready to Print</div>
+          <div className="fit-card__icon-wrap fit-card__icon-wrap--blue">
+            <Download size={40} strokeWidth={1.5} />
+          </div>
+          <h3 className="fit-card__title">Ready-Made Seal</h3>
+          <p className="fit-card__description">
+            A hand-tuned seal for this exact frame — <strong>download and print straight away</strong>.
+            No alignment or scanning needed.
+          </p>
+          <ul className="fit-card__perks">
+            <li>Hand-tuned for this frame</li>
+            <li>Fastest path to a printed seal</li>
+            <li>Buy the matching frames on Amazon</li>
+          </ul>
+          <span className="fit-card__cta">Download now →</span>
+        </button>
+      )}
 
       <div className="fit-type__cards">
 

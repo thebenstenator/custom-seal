@@ -13,6 +13,18 @@ export interface Frame {
 
 export const frames: Frame[] = [
   {
+    id: "vmjfbj",
+    name: "VMJFBJ Blue Light Blocking Glasses",
+    description: "Lightweight rectangular frames with blue light filtering lenses",
+    image: "🕶️",
+    popular: true,
+    modelUrl: "/models/vmjfbj_post-mirror_non-man-fixed.stl",
+    affiliateUrl: "https://www.amazon.com/dp/B0FLPTHSM8",
+    genericSealUrl: "/models/seal-vmjfbj.stl",
+    hardpoints: null,
+    sealLoop: null,
+  },
+  {
     id: "aviator",
     name: "Aviator Style",
     description: "Classic teardrop shape with thin metal frames",

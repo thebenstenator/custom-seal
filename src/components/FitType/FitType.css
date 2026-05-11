@@ -130,6 +130,43 @@
   color: #9ca3af;
 }
 
+/* ---- Featured (ready-made) card — full width above the grid ---- */
+
+.fit-card--featured {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto auto auto;
+  column-gap: 1.5rem;
+  align-items: start;
+  border-color: var(--color-primary);
+  background: #f0f7ff;
+  margin-bottom: 0.25rem;
+}
+
+.fit-card--featured .fit-card__icon-wrap {
+  grid-row: 1 / 4;
+  align-self: center;
+}
+
+.fit-card--featured .fit-card__title      { grid-column: 2; }
+.fit-card--featured .fit-card__description { grid-column: 2; }
+.fit-card--featured .fit-card__perks       { grid-column: 2; }
+.fit-card--featured .fit-card__cta         { grid-column: 2; }
+
+.fit-card__featured-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #2563eb;
+  color: white;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  margin-bottom: 0.25rem;
+}
+
 /* ---- Coming-soon badge ---- */
 
 .fit-card__soon-badge {
