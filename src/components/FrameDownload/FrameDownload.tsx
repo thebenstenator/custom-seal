@@ -93,8 +93,8 @@ export default function FrameDownload() {
             <ul className="frame-download__tips">
               <li>Layer height: <strong>0.2 mm</strong></li>
               <li>Infill: <strong>15–20%</strong></li>
-              <li>Print face-contact side down with supports</li>
-              <li>Material: PLA works well for testing fit</li>
+              <li>Print frame-contact side down with supports</li>
+              <li>PLA works for testing fit; TPU is better for flexibility</li>
             </ul>
           </div>
 
