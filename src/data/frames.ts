@@ -16,7 +16,7 @@ export const frames: Frame[] = [
     id: "vmjfbj",
     name: "VMJFBJ Blue Light Blocking Glasses",
     description: "Lightweight rectangular frames with blue light filtering lenses",
-    image: "🕶️",
+    image: "/images/vmjfbj.jpg",
     popular: true,
     modelUrl: "/models/vmjfbj_post-mirror_non-man-fixed.stl",
     affiliateUrl: "https://www.amazon.com/dp/B0FLPTHSM8",

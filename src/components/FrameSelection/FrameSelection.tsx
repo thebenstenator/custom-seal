@@ -41,7 +41,11 @@ export default function FrameSelection({ frames }: FrameSelectionProps) {
               {frame.popular && (
                 <span className="frame-card__badge">Popular</span>
               )}
-              <div className="frame-card__thumbnail">{frame.image}</div>
+              <div className="frame-card__thumbnail">
+                {frame.image.startsWith("/") || frame.image.startsWith("http")
+                  ? <img src={frame.image} alt={frame.name} className="frame-card__thumbnail-img" />
+                  : frame.image}
+              </div>
               <div className="frame-card__info">
                 <h3 className="frame-card__title">{frame.name}</h3>
                 <p className="frame-card__description">{frame.description}</p>

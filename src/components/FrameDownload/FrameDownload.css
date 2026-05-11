@@ -70,6 +70,12 @@
 }
 .frame-download__btn--amazon:hover { background: #d97706; }
 
+.frame-download__affiliate-note {
+  font-size: 0.775rem;
+  color: #9ca3af;
+  margin: -0.25rem 0 0;
+}
+
 .frame-download__btn--kofi {
   background: #ff5e5b;
   color: white;

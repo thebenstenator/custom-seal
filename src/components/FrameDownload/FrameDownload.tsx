@@ -62,7 +62,7 @@ export default function FrameDownload() {
           <div className="frame-download__actions">
             <button className="frame-download__btn frame-download__btn--primary" onClick={handleDownload}>
               <Download size={18} />
-              Download Seal STL
+              Download Seal STL — Free
             </button>
 
             {affiliateUrl && (
@@ -73,7 +73,7 @@ export default function FrameDownload() {
                 rel="noopener noreferrer"
               >
                 <ShoppingCart size={18} />
-                Buy frames on Amazon
+                Buy frames on Amazon*
               </a>
             )}
 
@@ -86,6 +86,12 @@ export default function FrameDownload() {
               <Heart size={18} />
               Leave a tip on Ko-fi
             </a>
+
+            {affiliateUrl && (
+              <p className="frame-download__affiliate-note">
+                * Affiliate link — I may earn a small commission at no extra cost to you.
+              </p>
+            )}
           </div>
 
           <div className="frame-download__section">
